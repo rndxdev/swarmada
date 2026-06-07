@@ -1939,6 +1939,50 @@ def codex_screen(screen, clock, font, big, small):
         pygame.display.flip()
 
 
+def leaderboard_screen(screen, clock, font, big, small):
+    """Standalone leaderboard viewer for the main menu (local, or global if a
+    server is configured). Returns 'back'/'quit'."""
+    tiles = build_star_tiles()
+    cam = Vector2(0, 0)
+    gscores = fetch_global() if SERVER_URL else None
+    is_global = gscores is not None
+    board = gscores if is_global else load_scores()
+
+    while True:
+        dt = min(clock.tick(FPS) / 1000.0, 0.05)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_f, pygame.K_F11):
+                    _fullscreen()
+                if event.key in (pygame.K_ESCAPE, pygame.K_b, pygame.K_BACKSPACE, pygame.K_RETURN):
+                    return "back"
+
+        cam += Vector2(16, 6) * dt
+        draw_starfield(screen, cam, tiles)
+        title = big.render("LEADERBOARD", True, GOLD)
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 44))
+        label = "global (verified)" if is_global else "local"
+        lab = small.render(label, True, GEM_COL if is_global else DIM)
+        screen.blit(lab, (WIDTH // 2 - lab.get_width() // 2, 96))
+
+        x, y = WIDTH // 2 - 240, 130
+        for i, e in enumerate(board[:14]):
+            col = GOLD if i == 0 else WHITE
+            screen.blit(font.render(f"{i + 1:2}.", True, col), (x, y))
+            screen.blit(font.render(str(e.get("name", "?"))[:12], True, col), (x + 40, y))
+            screen.blit(font.render(f"{e.get('score', 0):>8}", True, col), (x + 250, y))
+            screen.blit(small.render(f"R{e.get('round', 0)}", True, DIM), (x + 380, y + 3))
+            y += 30
+        if not board:
+            none = font.render("No scores yet — go set one!", True, DIM)
+            screen.blit(none, (WIDTH // 2 - none.get_width() // 2, 170))
+        hint = small.render("Esc or B: back", True, DIM)
+        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
+        pygame.display.flip()
+
+
 def title_screen(screen, clock, font, big, small, audio):
     """Animated title: a self-piloting ship weaves and dodges through space,
     auto-firing at drifting foes. Returns 'play' or 'quit'."""
@@ -1980,6 +2024,9 @@ def title_screen(screen, clock, font, big, small, audio):
                         return "quit"
                 if event.key == pygame.K_l:
                     if lore_screen(screen, clock, font, big, small) == "quit":
+                        return "quit"
+                if event.key == pygame.K_b:
+                    if leaderboard_screen(screen, clock, font, big, small) == "quit":
                         return "quit"
                 if event.key == pygame.K_m and audio:
                     audio.toggle_music()
@@ -2087,7 +2134,7 @@ def title_screen(screen, clock, font, big, small, audio):
         if int(t * 2) % 2 == 0:
             pr = big.render("PRESS  ENTER  TO  PLAY", True, GOLD)
             screen.blit(pr, (WIDTH // 2 - pr.get_width() // 2, HEIGHT - 150))
-        hint = small.render("ENTER play  •  I codex  •  L lore  •  F fullscreen  •  M music  •  Esc", True, DIM)
+        hint = small.render("ENTER play  •  B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
         pygame.display.flip()
 
