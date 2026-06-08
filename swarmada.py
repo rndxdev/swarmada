@@ -19,7 +19,7 @@ import sys
 import time
 
 import pygame
-from pygame.math import Vector2
+from pygame import Vector2          # NOT `from pygame.math` — pygbag tries to pip-install that
 
 # ---------------------------------------------------------------------------
 # Config
