@@ -12,6 +12,7 @@ Run:  python horde_survival.py
 """
 
 import array
+import asyncio
 import json
 import math
 import os
@@ -184,8 +185,11 @@ class Audio:
             self.music_chan = pygame.mixer.Channel(0)
         except pygame.error:
             return                      # no audio device -> silent, game still runs
-        self.enabled = True
-        self._build()
+        try:
+            self._build()
+            self.enabled = True
+        except Exception:               # e.g. web sandbox can't synth -> stay silent
+            self.enabled = False
 
     def _wave(self, frac, kind):
         if kind == 'sine':
@@ -1729,7 +1733,7 @@ def fetch_global():
         return None
 
 
-def load_assets(screen, big, small):
+async def load_assets(screen, big, small):
     """Smoothly load every bitmap asset, drawing a progress bar as we go."""
     art = Assets()
     title = big.render("LOADING", True, WHITE)
@@ -1748,7 +1752,7 @@ def load_assets(screen, big, small):
         screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y + 26))
         pygame.event.pump()
         pygame.display.flip()
-        pygame.time.delay(25)          # makes the smooth load visible
+        await asyncio.sleep(0.025)     # yields to the browser; smooth load on desktop
     return art
 
 
@@ -1816,7 +1820,7 @@ def _wrap(text, fnt, maxw):
     return lines
 
 
-def lore_screen(screen, clock, font, big, small):
+async def lore_screen(screen, clock, font, big, small):
     """Scrollable story + alien races. Returns 'back'/'quit'."""
     tiles = build_star_tiles()
     cam = Vector2(0, 0)
@@ -1871,9 +1875,10 @@ def lore_screen(screen, clock, font, big, small):
             y += h
         screen.set_clip(prev_clip)
         pygame.display.flip()
+        await asyncio.sleep(0)
 
 
-def codex_screen(screen, clock, font, big, small):
+async def codex_screen(screen, clock, font, big, small):
     """Scrollable menu: enlarged sprites with explanations. Returns 'back'/'quit'."""
     tiles = build_star_tiles()
     cam = Vector2(0, 0)
@@ -1937,9 +1942,10 @@ def codex_screen(screen, clock, font, big, small):
             screen.blit(small.render(desc, True, GEM_COL), (190, cy + 4))
         screen.set_clip(prev_clip)
         pygame.display.flip()
+        await asyncio.sleep(0)
 
 
-def leaderboard_screen(screen, clock, font, big, small):
+async def leaderboard_screen(screen, clock, font, big, small):
     """Standalone leaderboard viewer for the main menu (local, or global if a
     server is configured). Returns 'back'/'quit'."""
     tiles = build_star_tiles()
@@ -1981,9 +1987,10 @@ def leaderboard_screen(screen, clock, font, big, small):
         hint = small.render("Esc or B: back", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
         pygame.display.flip()
+        await asyncio.sleep(0)
 
 
-def title_screen(screen, clock, font, big, small, audio):
+async def title_screen(screen, clock, font, big, small, audio):
     """Animated title: a self-piloting ship weaves and dodges through space,
     auto-firing at drifting foes. Returns 'play' or 'quit'."""
     tiles = build_star_tiles()
@@ -2020,13 +2027,13 @@ def title_screen(screen, clock, font, big, small, audio):
                 if event.key == pygame.K_ESCAPE:
                     return "quit"
                 if event.key == pygame.K_i:
-                    if codex_screen(screen, clock, font, big, small) == "quit":
+                    if await codex_screen(screen, clock, font, big, small) == "quit":
                         return "quit"
                 if event.key == pygame.K_l:
-                    if lore_screen(screen, clock, font, big, small) == "quit":
+                    if await lore_screen(screen, clock, font, big, small) == "quit":
                         return "quit"
                 if event.key == pygame.K_b:
-                    if leaderboard_screen(screen, clock, font, big, small) == "quit":
+                    if await leaderboard_screen(screen, clock, font, big, small) == "quit":
                         return "quit"
                 if event.key == pygame.K_m and audio:
                     audio.toggle_music()
@@ -2137,9 +2144,10 @@ def title_screen(screen, clock, font, big, small, audio):
         hint = small.render("ENTER play  •  B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
         pygame.display.flip()
+        await asyncio.sleep(0)
 
 
-def main():
+async def main():
     global ART
     pygame.mixer.pre_init(SAMPLE_RATE, -16, 1, 512)
     pygame.init()
@@ -2152,10 +2160,10 @@ def main():
     big = pygame.font.SysFont("menlo,consolas,monospace", 44, bold=True)
     small = pygame.font.SysFont("menlo,consolas,monospace", 15)
 
-    ART = load_assets(screen, big, small)
+    ART = await load_assets(screen, big, small)
     audio = Audio(music=True)
 
-    if title_screen(screen, clock, font, big, small, audio) == "quit":
+    if await title_screen(screen, clock, font, big, small, audio) == "quit":
         pygame.quit()
         return
 
@@ -2163,7 +2171,7 @@ def main():
 
     # Offer to continue an autosaved run
     save = load_save()
-    if save and resume_prompt(screen, big, font):
+    if save and await resume_prompt(screen, big, font):
         msg = font.render("Restoring run...", True, WHITE)
         screen.fill(BG)
         screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
@@ -2247,11 +2255,12 @@ def main():
             ov.set_alpha(int(fade))
             screen.blit(ov, (0, 0))
         pygame.display.flip()
+        await asyncio.sleep(0)
 
     pygame.quit()
 
 
-def resume_prompt(screen, big, font):
+async def resume_prompt(screen, big, font):
     """Tiny C/N prompt at startup when an autosave exists."""
     title = big.render("CONTINUE RUN?", True, GOLD)
     hint = font.render("C  continue saved run     N  new game", True, WHITE)
@@ -2270,7 +2279,8 @@ def resume_prompt(screen, big, font):
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 50))
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 20))
         pygame.display.flip()
+        await asyncio.sleep(0)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

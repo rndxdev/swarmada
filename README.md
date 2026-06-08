@@ -5,10 +5,35 @@ art and synthesized audio (no third-party assets → copyright-safe), an endless
 scrolling world, silent escalating waves, bosses (including the mega **OMEGA**),
 upgrades, and a **replay-verified** global leaderboard.
 
-## Play
+## Play (desktop — Windows / Mac / Linux)
 ```bash
-./.venv/bin/python horde_survival.py
+pip install -r requirements.txt
+python horde_survival.py        # or: python main.py
 ```
+
+## Play in a browser (share a link — any OS, no install)
+The game also compiles to WebAssembly with [pygbag], so anyone can play it from
+a URL on any computer — no Python, no download.
+
+```bash
+pip install pygbag
+./build_web.sh                  # output -> build/web/
+```
+Then host the **contents of `build/web/`** anywhere static:
+- **itch.io** (easiest link): zip the files inside `build/web/`, create a new
+  project, set "Kind of project = HTML", upload the zip, tick "play in browser",
+  and set the viewport to **960 x 600**. Share the page URL.
+- **GitHub Pages**: copy `build/web/` into a `docs/` folder (or a `gh-pages`
+  branch), enable Pages, and share the published URL.
+
+Test it locally first: `python -m pygbag main.py` then open http://localhost:8000.
+
+Notes for the web version: the local leaderboard, autosave/resume, and the
+global leaderboard don't persist/submit inside the browser sandbox (they no-op
+safely); audio falls back to silent if the browser can't synthesize it. The core
+game plays fully. It runs a bit slower than native, especially in late waves.
+
+[pygbag]: https://github.com/pygame-web/pygbag
 **Controls:** WASD/arrows move · 1/2/3 pick upgrade · P pause (autosaves) ·
 M music · R restart · Esc pause/quit.
 

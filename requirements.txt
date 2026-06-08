@@ -1,0 +1,4 @@
+# Run the game (desktop, any OS):  pip install -r requirements.txt
+pygame>=2.6
+
+# To build the browser version, also: pip install pygbag  (then ./build_web.sh)

@@ -15,5 +15,10 @@ savegame.json
 leaderboard.json
 leaderboard.json.tmp
 
+# Web build output (regenerate with ./build_web.sh)
+build/
+*.apk
+*.tar.gz
+
 # OS
 .DS_Store
