@@ -1,14 +1,12 @@
 """
-Horde Survival — a tiny Vampire-Survivors-style game.
+Swarmada — a tiny alien-swarm survival game.
 
-Move with WASD / arrow keys across an ENDLESS world. Your weapons fire
-automatically. Kill enemies, collect XP gems, level up, grab item clusters
-(including new weapons that auto-equip), and survive the periodic BOSS waves.
+You're the last Vanguard pilot. Fly an ENDLESS slice of space (WASD / arrows),
+hold the line against escalating waves of the alien Tide, collect XP, level up,
+grab item clusters (including new weapons that auto-equip), and outlast the
+bosses — up to the mega OMEGA.
 
-Everything is drawn with primitive shapes (no image/sound assets), so the
-build stays tiny and it runs on any machine with no real GPU needed.
-
-Run:  python horde_survival.py
+Run:  python swarmada.py
 """
 
 import array
@@ -28,7 +26,7 @@ from pygame.math import Vector2
 WIDTH, HEIGHT = 960, 600
 CENTER = Vector2(WIDTH / 2, HEIGHT / 2)
 FPS = 60
-TITLE = "Horde Survival"
+TITLE = "Swarmada"
 
 SPAWN_MIN, SPAWN_MAX = 640, 780     # enemies appear just off-screen
 CULL_DIST2 = 1200 ** 2              # despawn enemies you've left far behind
@@ -122,8 +120,8 @@ def save_scores(scores):
 
 
 SAVE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "savegame.json")
-# Optional global leaderboard server (your VPS). Set HORDE_SERVER=http://host:port
-SERVER_URL = os.environ.get("HORDE_SERVER", "").rstrip("/")
+# Optional global leaderboard server (your VPS). Set SWARMADA_SERVER=http://host:port
+SERVER_URL = os.environ.get("SWARMADA_SERVER", "").rstrip("/")
 
 
 def save_game(game):
@@ -2183,11 +2181,11 @@ async def title_screen(screen, clock, font, big, small, audio):
         else:
             pygame.draw.circle(screen, PLAYER_COL, ship, 13)
 
-        title = huge.render("HORDE SURVIVAL", True, WHITE)
+        title = huge.render("SWARMADA", True, WHITE)
         tx = WIDTH // 2 - title.get_width() // 2
-        screen.blit(huge.render("HORDE SURVIVAL", True, (18, 26, 44)), (tx + 3, 93))
+        screen.blit(huge.render("SWARMADA", True, (18, 26, 44)), (tx + 3, 93))
         screen.blit(title, (tx, 90))
-        sub = font.render("a tiny space survivors game", True, GOLD)
+        sub = font.render("hold the line against the alien swarm", True, GOLD)
         screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 172))
         if int(t * 2) % 2 == 0:
             pr = big.render("PRESS  ENTER  TO  PLAY", True, GOLD)

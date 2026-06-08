@@ -1,5 +1,5 @@
 """
-Procedural bitmap-asset generator for Horde Survival (space theme).
+Procedural bitmap-asset generator for Swarmada (space theme).
 
 We draw simple pixel-art with pygame primitives and save them as real .png
 files in assets/. Because we author them ourselves there's no licensing /

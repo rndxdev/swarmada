@@ -1,14 +1,15 @@
-# Horde Survival
+# Swarmada
 
-A tiny space-themed Vampire-Survivors-style game in pygame. Procedural bitmap
-art and synthesized audio (no third-party assets → copyright-safe), an endless
-scrolling world, silent escalating waves, bosses (including the mega **OMEGA**),
-upgrades, and a **replay-verified** global leaderboard.
+A tiny **alien-swarm survival** game in pygame: you're the last Vanguard pilot
+holding the line against an endless alien Tide. Procedural bitmap art and
+synthesized audio (no third-party assets → copyright-safe), an endless scrolling
+world, silent escalating waves, bosses (including the mega **OMEGA**), upgrades,
+and a **replay-verified** global leaderboard.
 
 ## Play (desktop — Windows / Mac / Linux)
 ```bash
 pip install -r requirements.txt
-python horde_survival.py        # or: python main.py
+python swarmada.py        # or: python main.py
 ```
 
 ## Play in a browser (share a link — any OS, no install)
@@ -51,7 +52,7 @@ Assets auto-generate on first run. To regenerate the art:
 ```
 
 ## Files
-- `horde_survival.py` — the game (deterministic, fixed-timestep sim).
+- `swarmada.py` — the game (deterministic, fixed-timestep sim).
 - `make_assets.py` — generates `assets/*.png` pixel-art.
 - `leaderboard_server.py` — replay-verifying global leaderboard server.
 - `assets/` — generated sprites. `scores.json` / `savegame.json` are created at runtime.
@@ -67,22 +68,22 @@ is rejected.
 ```bash
 pip install pygame                      # only dependency (no display needed)
 python leaderboard_server.py            # listens on 0.0.0.0:8000
-# optional: HORDE_HOST / HORDE_PORT env vars
+# optional: SWARMADA_HOST / SWARMADA_PORT env vars
 ```
-Keep the server's `horde_survival.py` **identical** to the players' copy — the
+Keep the server's `swarmada.py` **identical** to the players' copy — the
 simulation and `SIM_VERSION` must match or valid replays get rejected. Bump
 `SIM_VERSION` whenever gameplay math changes (old replays then stop validating).
 
 Run it persistently (example systemd unit):
 ```ini
 [Unit]
-Description=Horde leaderboard
+Description=Swarmada leaderboard
 After=network.target
 [Service]
-WorkingDirectory=/opt/horde
+WorkingDirectory=/opt/swarmada
 ExecStart=/usr/bin/python3 leaderboard_server.py
 Restart=always
-Environment=HORDE_PORT=8000
+Environment=SWARMADA_PORT=8000
 [Install]
 WantedBy=multi-user.target
 ```
@@ -90,10 +91,10 @@ Put it behind nginx/caddy for TLS if you want `https://`.
 
 ### Point the game at it
 ```bash
-HORDE_SERVER=http://YOUR_VPS_IP:8000 ./.venv/bin/python horde_survival.py
+SWARMADA_SERVER=http://YOUR_VPS_IP:8000 ./.venv/bin/python swarmada.py
 ```
 On death the run is submitted; the leaderboard screen then shows the verified
-**global** board. Without `HORDE_SERVER` set, it just uses the local board.
+**global** board. Without `SWARMADA_SERVER` set, it just uses the local board.
 
 ### Endpoints
 - `POST /submit` — body is a replay JSON; verifies + stores; returns `{ok, leaderboard}`.

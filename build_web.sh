@@ -12,14 +12,14 @@ PY="./.venv/bin/python"
 
 STAGE_PARENT="$(mktemp -d)"
 trap 'rm -rf "$STAGE_PARENT"' EXIT
-STAGE="$STAGE_PARENT/horde-survival"     # folder name -> apk name
+STAGE="$STAGE_PARENT/swarmada"           # folder name -> apk name
 mkdir -p "$STAGE"
 
 # Stage ONLY the game files (never the virtualenv, or the build balloons to 100s of MB)
-cp main.py horde_survival.py make_assets.py "$STAGE"/
+cp main.py swarmada.py make_assets.py "$STAGE"/
 cp -r assets "$STAGE"/assets
 
-"$PY" -m pygbag --build --title "Horde Survival" "$STAGE/main.py"
+"$PY" -m pygbag --build --title "Swarmada" "$STAGE/main.py"
 
 rm -rf build
 mkdir -p build

@@ -1,5 +1,5 @@
 """
-Replay-verified global leaderboard server for Horde Survival.
+Replay-verified global leaderboard server for Swarmada.
 
 Runs on your VPS with just Python 3 + pygame (no display needed). Every
 submitted score is re-simulated from its seed + recorded inputs; if the
@@ -10,9 +10,9 @@ scores impractical — a fake number won't reproduce.
     python leaderboard_server.py            # listens on 0.0.0.0:8000
 
 Then on the player's machine, point the game at it:
-    HORDE_SERVER=http://YOUR_VPS_IP:8000 python horde_survival.py
+    SWARMADA_SERVER=http://YOUR_VPS_IP:8000 python swarmada.py
 
-IMPORTANT: keep this server's copy of horde_survival.py identical to the
+IMPORTANT: keep this server's copy of swarmada.py identical to the
 players' copy — the simulation (and SIM_VERSION) must match, or valid
 replays will be rejected.
 """
@@ -23,7 +23,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import horde_survival as hs
+import swarmada as hs
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "leaderboard.json")
 MAX_BODY = 8 * 1024 * 1024        # 8 MB cap on a submission
@@ -126,9 +126,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    host = os.environ.get("HORDE_HOST", "0.0.0.0")
-    port = int(os.environ.get("HORDE_PORT", "8000"))
-    print(f"Horde leaderboard server on {host}:{port}  (sim v{hs.SIM_VERSION})")
+    host = os.environ.get("SWARMADA_HOST", "0.0.0.0")
+    port = int(os.environ.get("SWARMADA_PORT", "8000"))
+    print(f"Swarmada leaderboard server on {host}:{port}  (sim v{hs.SIM_VERSION})")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 
 
