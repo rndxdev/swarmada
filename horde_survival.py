@@ -251,6 +251,41 @@ class Audio:
                 buf.append(int(max(-1.0, min(1.0, s * a * d)) * amp))
         return pygame.mixer.Sound(buffer=buf.tobytes())
 
+    def _horror(self, dur=1.9):
+        """A terrifying arrival sting: a descending dissonant (tritone) drone
+        with detuned sub-bass beating, slow tremolo, and a noise rumble."""
+        n = int(SAMPLE_RATE * dur)
+        buf = array.array('h')
+        amp = 32767
+        for i in range(n):
+            t = i / SAMPLE_RATE
+            prog = t / dur
+            f1 = 200.0 * (1.0 - prog) + 45.0        # slow descent into dread
+            f2 = f1 * 1.414                          # tritone = dissonance
+            trem = 0.7 + 0.3 * math.sin(2 * math.pi * 5.0 * t)
+            s = (0.45 * math.sin(2 * math.pi * f1 * t)
+                 + 0.32 * math.sin(2 * math.pi * f2 * t)
+                 + 0.40 * math.sin(2 * math.pi * 48.0 * t)
+                 + 0.25 * math.sin(2 * math.pi * 50.5 * t)     # beats against 48Hz
+                 + 0.15 * random.uniform(-1.0, 1.0) * (1.0 - prog))
+            env = min(1.0, t / 0.06) * (1.0 - prog * 0.5)
+            buf.append(int(max(-1.0, min(1.0, s * trem * env * 0.5)) * amp))
+        return pygame.mixer.Sound(buffer=buf.tobytes())
+
+    def _boom(self, dur=0.55):
+        """Deep sub-bass impact for the Omega's slam."""
+        n = int(SAMPLE_RATE * dur)
+        buf = array.array('h')
+        amp = int(32767 * 0.7)
+        for i in range(n):
+            t = i / SAMPLE_RATE
+            prog = t / dur
+            f = 130.0 * (1.0 - prog) + 28.0
+            s = 0.7 * math.sin(2 * math.pi * f * t) + 0.3 * random.uniform(-1.0, 1.0) * (1.0 - prog)
+            env = min(1.0, t / 0.004) * (1.0 - prog)
+            buf.append(int(max(-1.0, min(1.0, s * env)) * amp))
+        return pygame.mixer.Sound(buffer=buf.tobytes())
+
     def _build(self):
         self.sounds = {
             'shoot':       self._tone(680, 0.06, 'square', 0.16, fenv=-0.45),
@@ -268,6 +303,8 @@ class Audio:
             'hurt':        self._noise(0.12, 0.30, tone=140),
             'nova':        self._tone(900, 0.25, 'sine', 0.30, fenv=-0.8),
             'wave_clear':  self._seq([(659, 0.10), (880, 0.16)], 0.32, 'sine'),
+            'omega':       self._horror(1.9),       # OMEGA arrival — horror-space sting
+            'omega_slam':  self._boom(0.55),        # OMEGA ground slam
         }
         try:
             self.music = self._build_music()
@@ -1063,7 +1100,7 @@ class Game:
         omega = Enemy.make_omega(self._around_player(SPAWN_MIN, SPAWN_MAX), self.round)
         self.enemies.append(omega)
         self._banner("!!!  THE OMEGA  !!!", 3.5)
-        self.sfx('boss_spawn')
+        self.sfx('omega')
 
     def spawn_enemy(self):
         n = self.round
@@ -1359,7 +1396,7 @@ class Game:
                 r = b.radius + 170
                 if self.cosmetic:
                     self.rings.append(Ring(b.pos.copy(), r, (255, 120, 90)))
-                self.sfx('nova', 0.8)
+                self.sfx('omega_slam', 0.9)
                 if dist <= r:
                     p.hurt(b.damage * 0.8)
 
