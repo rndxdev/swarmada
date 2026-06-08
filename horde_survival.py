@@ -38,7 +38,7 @@ MAX_SPEED = 7.0                    # hard cap on player move speed (base is 3.5)
 # in fixed steps; given the same seed + the same per-step input masks it always
 # produces the same score, so a server can re-run a replay to validate it.
 SIM_DT = 1.0 / 60.0
-SIM_VERSION = 2                    # bump whenever gameplay math/balance changes
+SIM_VERSION = 3                    # bump whenever gameplay math/balance changes
 IN_UP, IN_DOWN, IN_LEFT, IN_RIGHT = 1, 2, 4, 8
 IN_C1, IN_C2, IN_C3 = 16, 32, 64
 
@@ -426,9 +426,13 @@ class Player:
 
     def draw(self, surf, cam):
         sp = self.pos - cam
-        ring = pygame.Surface((self.pickup_radius * 2, self.pickup_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(ring, (90, 170, 255, 22), (self.pickup_radius, self.pickup_radius), int(self.pickup_radius))
-        surf.blit(ring, (sp.x - self.pickup_radius, sp.y - self.pickup_radius))
+        # Vacuum window: only drawn once Magnetism opens it; very transparent fill + thin rim.
+        if self.pickup_radius > 30:
+            r = int(self.pickup_radius)
+            ring = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(ring, (90, 170, 255, 12), (r + 1, r + 1), r)
+            pygame.draw.circle(ring, (120, 200, 255, 70), (r + 1, r + 1), r, 1)
+            surf.blit(ring, (sp.x - r - 1, sp.y - r - 1))
 
         spr = ART.get("player_ship") if ART else None
         if spr:
@@ -902,7 +906,8 @@ STAT_UPGRADES = [
     {"id": "pierce",   "name": "Piercing",      "desc": "+1 bolt pierce",     "cap": 5, "fn": lambda p: setattr(p, "pierce", p.pierce + 1)},
     {"id": "vel",      "name": "Velocity",      "desc": "+20% bolt speed",    "cap": 5, "fn": lambda p: setattr(p, "proj_speed", p.proj_speed * 1.2)},
     {"id": "bigshot",  "name": "Heavy Rounds",  "desc": "+2 bolt size",       "cap": 3, "fn": lambda p: setattr(p, "bolt_radius", p.bolt_radius + 2)},
-    {"id": "boots",    "name": "Swift Boots",   "desc": "+14% move speed",    "cap": 6, "fn": lambda p: setattr(p, "speed", p.speed * 1.14)},
+    {"id": "boots",    "name": "Swift Speed Boost", "desc": "+14% move speed", "cap": 6,
+     "avail": lambda p: p.speed < MAX_SPEED - 0.05, "fn": lambda p: setattr(p, "speed", p.speed * 1.14)},
     {"id": "vit",      "name": "Vitality",      "desc": "+25 max HP & heal",  "cap": 6, "fn": lambda p: _grant_hp(p, 25)},
     {"id": "regen",    "name": "Regeneration",  "desc": "+0.6 HP / sec",      "cap": 5, "fn": lambda p: setattr(p, "hp_regen", p.hp_regen + 0.6)},
     {"id": "shield",   "name": "Energy Shield", "desc": "+20 max shield",     "cap": 6, "fn": lambda p: _grant_shield(p, 20)},
@@ -1124,8 +1129,12 @@ class Game:
             self._banner("Shield restored!")
             self.sfx('shield')
         elif kind == "speed":
-            p.speed *= 1.06
-            self._banner("Speed up!")
+            if p.speed >= MAX_SPEED - 0.05:
+                self.score += 150
+                self._banner("Max speed! +150")
+            else:
+                p.speed *= 1.06
+                self._banner("Speed up!")
             self.sfx('speed')
         elif kind == "damage":
             p.damage_mult *= 1.10
@@ -1413,8 +1422,12 @@ class Game:
         p = self.player
         pool = []
         for u in STAT_UPGRADES:
-            if p.upgrade_counts.get(u["id"], 0) < u["cap"]:    # hide maxed buffs
-                pool.append((u["name"], u["desc"], _stat_apply(u)))
+            if p.upgrade_counts.get(u["id"], 0) >= u["cap"]:   # hide maxed buffs
+                continue
+            avail = u.get("avail")
+            if avail and not avail(p):                          # e.g. hide speed at max speed
+                continue
+            pool.append((u["name"], u["desc"], _stat_apply(u)))
         for cls in WEAPON_REGISTRY:
             w = p.get_weapon(cls)
             if w is None:
@@ -1540,12 +1553,13 @@ class Game:
                  (f"Bolt        dmg {p.damage * mult:.0f}", WHITE)]
         for w in p.weapons:
             lines.append((f"{w.NAME:<11} L{w.level} dmg {w.damage * mult:.0f}", WHITE))
+        vacuum = f"ON {p.pickup_radius:.0f}" if p.pickup_radius > 30 else "off"
         lines += [("BUFFS", GOLD),
                   (f"Power   x{mult:.2f}", GEM_COL),
                   (f"Speed   {p.speed:.1f}", GEM_COL),
                   (f"Max HP  {p.max_hp:.0f}", GEM_COL),
                   (f"Shield  {p.max_shield:.0f}", GEM_COL),
-                  (f"Pickup  {p.pickup_radius:.0f}", GEM_COL)]
+                  (f"Vacuum  {vacuum}", GEM_COL)]
 
         lh = 16
         h = len(lines) * lh + 10

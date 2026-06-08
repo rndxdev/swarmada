@@ -90,14 +90,27 @@ def boss_warlord():
 
 
 def boss_devourer():
+    """Deep-sea anglerfish: gaping toothy maw + a glowing lure over its head."""
     s = _surf(68)
-    pur, dark = (160, 90, 255), (70, 20, 120)
-    hull = [(34, 2), (58, 46), (34, 58), (10, 46)]
-    pygame.draw.polygon(s, pur, hull)
-    pygame.draw.polygon(s, dark, hull, 3)
-    pygame.draw.polygon(s, (240, 230, 255), [(29, 12), (34, 2), (39, 12)])  # fang
-    pygame.draw.circle(s, (255, 230, 120), (27, 30), 3)
-    pygame.draw.circle(s, (255, 230, 120), (41, 30), 3)
+    c = 34
+    body, dark = (95, 55, 150), (35, 18, 70)
+    # Bulbous body (front = up) with a tail fin
+    pygame.draw.circle(s, body, (c, 42), 22)
+    pygame.draw.polygon(s, body, [(c - 13, 58), (c + 13, 58), (c, 67)])      # tail
+    pygame.draw.circle(s, dark, (c, 42), 22, 3)
+    # Gaping maw at the front
+    pygame.draw.circle(s, dark, (c, 26), 13)
+    for tx in range(c - 11, c + 12, 5):                                     # upper teeth
+        pygame.draw.polygon(s, (240, 245, 255), [(tx, 17), (tx + 4, 17), (tx + 2, 27)])
+    for tx in range(c - 9, c + 10, 5):                                      # lower teeth
+        pygame.draw.polygon(s, (240, 245, 255), [(tx, 35), (tx + 4, 35), (tx + 2, 25)])
+    # Beady eye
+    pygame.draw.circle(s, (255, 230, 120), (c + 9, 42), 5)
+    pygame.draw.circle(s, dark, (c + 9, 42), 2)
+    # Lure: stalk curving over the head + glowing bulb
+    pygame.draw.line(s, (120, 90, 160), (c, 20), (c - 3, 8), 3)
+    pygame.draw.circle(s, (255, 250, 190), (c - 3, 6), 6)                   # glow
+    pygame.draw.circle(s, (255, 235, 110), (c - 3, 6), 4)                   # bulb
     return s
 
 
