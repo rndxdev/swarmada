@@ -15,6 +15,7 @@ import json
 import math
 import os
 import random
+import sys
 import time
 
 import pygame
@@ -1030,7 +1031,10 @@ class Game:
 
     def reset(self, seed=None):
         if seed is None:
-            seed = random.SystemRandom().getrandbits(31)   # fresh, unpredictable
+            try:
+                seed = random.SystemRandom().getrandbits(31)   # fresh, unpredictable
+            except Exception:
+                seed = random.getrandbits(31)                  # web sandbox fallback
         self.seed = seed
         self.rng = random.Random(seed)
         self.replay = []                       # per-step input masks
@@ -2207,8 +2211,10 @@ async def main():
     global ART
     pygame.mixer.pre_init(SAMPLE_RATE, -16, 1, 512)
     pygame.init()
-    # SCALED lets fullscreen scale the 960x600 layout to fit (letterboxed).
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
+    # SCALED lets desktop fullscreen scale the 960x600 layout (letterboxed),
+    # but pygame-web doesn't support it — use a plain surface in the browser.
+    flags = 0 if sys.platform == "emscripten" else pygame.SCALED
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
     pygame.display.set_caption(TITLE)
     clock = pygame.time.Clock()
 
@@ -2218,7 +2224,10 @@ async def main():
 
     ART = await load_assets(screen, big, small)
     if ART.get("icon"):
-        pygame.display.set_icon(ART.get("icon"))
+        try:
+            pygame.display.set_icon(ART.get("icon"))
+        except pygame.error:
+            pass
     audio = Audio(music=True)
 
     if await title_screen(screen, clock, font, big, small, audio) == "quit":
