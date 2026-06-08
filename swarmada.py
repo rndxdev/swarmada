@@ -36,7 +36,7 @@ MAX_SPEED = 7.0                    # hard cap on player move speed (base is 3.5)
 # in fixed steps; given the same seed + the same per-step input masks it always
 # produces the same score, so a server can re-run a replay to validate it.
 SIM_DT = 1.0 / 60.0
-SIM_VERSION = 3                    # bump whenever gameplay math/balance changes
+SIM_VERSION = 4                    # bump whenever gameplay math/balance changes
 IN_UP, IN_DOWN, IN_LEFT, IN_RIGHT = 1, 2, 4, 8
 IN_C1, IN_C2, IN_C3 = 16, 32, 64
 
@@ -62,9 +62,9 @@ ENEMY_TYPES = {
 # Boss archetypes — cycled (and made tougher) each time one appears.
 BOSS_TYPES = [
     {"name": "THE WARLORD",   "color": (255, 80, 160), "radius": 48, "hp": 1.0, "speed": 2.4, "dmg": 1.0, "behavior": "charger", "sprite": "boss_warlord"},
-    {"name": "THE DEVOURER",  "color": (150, 90, 255), "radius": 34, "hp": 0.8, "speed": 3.4, "dmg": 0.9, "behavior": "fast",    "sprite": "boss_devourer"},
-    {"name": "THE COLOSSUS",  "color": (255, 140, 60), "radius": 110, "hp": 2.6, "speed": 1.2, "dmg": 1.8, "behavior": "tank",    "sprite": "boss_colossus"},
-    {"name": "THE REAPER",    "color": (90, 230, 200), "radius": 40, "hp": 1.1, "speed": 2.0, "dmg": 1.0, "behavior": "shooter", "sprite": "boss_reaper"},
+    {"name": "THE DEVOURER",  "color": (150, 90, 255), "radius": 34, "hp": 0.7, "speed": 3.4, "dmg": 0.9, "behavior": "fast",    "sprite": "boss_devourer"},
+    {"name": "THE COLOSSUS",  "color": (255, 140, 60), "radius": 110, "hp": 3.2, "speed": 1.2, "dmg": 1.8, "behavior": "tank",    "sprite": "boss_colossus"},
+    {"name": "THE REAPER",    "color": (90, 230, 200), "radius": 40, "hp": 1.3, "speed": 2.0, "dmg": 1.0, "behavior": "shooter", "sprite": "boss_reaper"},
 ]
 
 ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -520,7 +520,7 @@ class Enemy:
     def make_boss(cls, pos, index, rnd):
         spec = BOSS_TYPES[index % len(BOSS_TYPES)]
         cycle = index // len(BOSS_TYPES)                  # 0, 1, 2... tougher each cycle
-        hp = (700 + rnd * 260) * spec["hp"] * (1 + cycle * 0.5)
+        hp = (500 + rnd * 450) * spec["hp"] * (1 + cycle * 0.6)
         speed = spec["speed"] + cycle * 0.2
         dmg = (22 + rnd * 2) * spec["dmg"]
         xp = 40 + index * 25
@@ -1085,6 +1085,11 @@ class Game:
         if n % 20 == 0:                      # every 20th round: the mega-boss
             self.round_budget = 10 + n
             self.spawn_omega()
+        elif n % 10 == 0:                    # every 10th: ALL boss archetypes at once
+            self.round_budget = 8 + n
+            for _ in range(len(BOSS_TYPES)):
+                self.spawn_boss()            # 4 consecutive indices -> one of each type
+            self._banner("ALL-BOSS ASSAULT!", 3.2)
         elif self.is_boss_round:
             self.round_budget = 6 + n        # fewer adds — the boss is the threat
             for _ in range(1 + n // 15):     # extra bosses ramp slower now
@@ -1568,7 +1573,7 @@ class Game:
         bosses = [e for e in self.enemies if e.is_boss and e.hp > 0]
         bw = 520
         x = WIDTH // 2 - bw // 2
-        for i, b in enumerate(bosses[:3]):
+        for i, b in enumerate(bosses[:4]):
             y = HEIGHT - 34 - i * 26
             pygame.draw.rect(s, (40, 40, 50), (x, y, bw, 16))
             pygame.draw.rect(s, b.color, (x, y, bw * max(0, b.hp) / b.max_hp, 16))
