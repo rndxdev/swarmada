@@ -34,6 +34,14 @@ safely); audio falls back to silent if the browser can't synthesize it. The core
 game plays fully. It runs a bit slower than native, especially in late waves.
 
 [pygbag]: https://github.com/pygame-web/pygbag
+
+## Credits & license
+- Built with **[pygame](https://www.pygame.org/)** (LGPL) on **SDL2** (zlib). pygame
+  is dynamically imported (not modified or statically bundled), so the game can be
+  licensed freely; attribution is given here and on the title screen.
+- All sprites (`make_assets.py`) and sound/music (synthesized at runtime) are
+  original to this project — no third-party art or audio assets.
+- Web export by **[pygbag](https://github.com/pygame-web/pygbag)**.
 **Controls:** WASD/arrows move · 1/2/3 pick upgrade · P pause (autosaves) ·
 M music · R restart · Esc pause/quit.
 

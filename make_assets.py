@@ -228,7 +228,26 @@ def gem():
     return s
 
 
+def icon():
+    """App / window / favicon: a dark space roundel, our ship, and a red threat glow."""
+    s = _surf(64)
+    pygame.draw.rect(s, (16, 18, 28), (2, 2, 60, 60), border_radius=12)
+    pygame.draw.rect(s, (60, 70, 110), (2, 2, 60, 60), 2, border_radius=12)
+    for (x, y) in [(12, 14), (50, 18), (20, 50), (47, 47), (33, 10)]:
+        pygame.draw.circle(s, (185, 195, 225), (x, y), 1)
+    glow = _surf(64)
+    pygame.draw.circle(glow, (255, 60, 90, 70), (32, 40), 16)
+    s.blit(glow, (0, 0))
+    body = [(32, 12), (46, 46), (32, 38), (18, 46)]
+    pygame.draw.polygon(s, (80, 200, 255), body)
+    pygame.draw.polygon(s, (20, 60, 95), body, 2)
+    pygame.draw.circle(s, (225, 245, 255), (32, 26), 3)
+    pygame.draw.polygon(s, (255, 180, 80), [(28, 38), (36, 38), (32, 50)])
+    return s
+
+
 MAKERS = {
+    "icon": icon,
     "player_ship": player_ship,
     "enemy_grunt": enemy_grunt,
     "enemy_runner": enemy_runner,

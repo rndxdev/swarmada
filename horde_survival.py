@@ -2194,6 +2194,8 @@ async def title_screen(screen, clock, font, big, small, audio):
             screen.blit(pr, (WIDTH // 2 - pr.get_width() // 2, HEIGHT - 150))
         hint = small.render("ENTER play  •  B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
+        cred = small.render("made with pygame (LGPL) + SDL", True, (70, 78, 96))
+        screen.blit(cred, (WIDTH // 2 - cred.get_width() // 2, HEIGHT - 26))
         pygame.display.flip()
         await asyncio.sleep(0)
 
@@ -2212,6 +2214,8 @@ async def main():
     small = pygame.font.SysFont("menlo,consolas,monospace", 15)
 
     ART = await load_assets(screen, big, small)
+    if ART.get("icon"):
+        pygame.display.set_icon(ART.get("icon"))
     audio = Audio(music=True)
 
     if await title_screen(screen, clock, font, big, small, audio) == "quit":

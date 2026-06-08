@@ -24,6 +24,7 @@ cp -r assets "$STAGE"/assets
 rm -rf build
 mkdir -p build
 cp -r "$STAGE/build/web" build/web
+cp assets/icon.png build/web/favicon.png 2>/dev/null || true   # our icon, not pygbag's
 
 echo
 echo "Web build ready: build/web/"
