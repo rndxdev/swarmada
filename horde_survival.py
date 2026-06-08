@@ -1933,7 +1933,7 @@ async def codex_screen(screen, clock, font, big, small):
     """Scrollable menu: enlarged sprites with explanations. Returns 'back'/'quit'."""
     tiles = build_star_tiles()
     cam = Vector2(0, 0)
-    box, rowh, top = 76, 92, 120
+    box, rowh, top = 104, 120, 116
     view_h = HEIGHT - top - 24
 
     icons = []
@@ -1986,11 +1986,11 @@ async def codex_screen(screen, clock, font, big, small):
                 continue
             cy = y + rowh // 2
             if ic:
-                screen.blit(ic, ic.get_rect(center=(90, cy)))
+                screen.blit(ic, ic.get_rect(center=(100, cy)))
                 if elite:
-                    pygame.draw.circle(screen, (255, 240, 120), (90, cy), box // 2 - 2, 2)
-            screen.blit(font.render(name, True, WHITE), (190, cy - 22))
-            screen.blit(small.render(desc, True, GEM_COL), (190, cy + 4))
+                    pygame.draw.circle(screen, (255, 240, 120), (100, cy), box // 2 - 2, 2)
+            screen.blit(font.render(name, True, WHITE), (210, cy - 22))
+            screen.blit(small.render(desc, True, GEM_COL), (210, cy + 4))
         screen.set_clip(prev_clip)
         pygame.display.flip()
         await asyncio.sleep(0)
