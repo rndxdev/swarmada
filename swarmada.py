@@ -2134,6 +2134,39 @@ async def leaderboard_screen(screen, clock, font, big, small):
         await asyncio.sleep(0)
 
 
+async def warning_screen(screen, clock, font, big, small):
+    """Photosensitivity warning shown briefly at startup. Returns 'ok'/'quit'."""
+    text = ("A small percentage of people may experience seizures when exposed to "
+            "flashing lights or patterns, including while playing video games. If you "
+            "or anyone in your family has an epileptic condition, consult a doctor "
+            "before playing. Stop immediately and see a doctor if you experience "
+            "dizziness, altered vision, eye or muscle twitches, loss of awareness, "
+            "disorientation, or convulsions.")
+    lines = _wrap(text, font, WIDTH - 160)
+    t = 0.0
+    while True:
+        t += min(clock.tick(FPS) / 1000.0, 0.05)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                return "ok"
+        if t > 7.0:
+            return "ok"
+        screen.fill(BG)
+        title = big.render("PHOTOSENSITIVITY WARNING", True, GOLD)
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 96))
+        y = 188
+        for ln in lines:
+            r = font.render(ln, True, WHITE)
+            screen.blit(r, (WIDTH // 2 - r.get_width() // 2, y))
+            y += 27
+        hint = small.render("press any key or tap to continue", True, DIM)
+        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
+        pygame.display.flip()
+        await asyncio.sleep(0)
+
+
 async def title_screen(screen, clock, font, big, small, audio):
     """Animated title: a self-piloting ship weaves and dodges through space,
     auto-firing at drifting foes. Returns 'play' or 'quit'."""
@@ -2318,6 +2351,9 @@ async def main():
             pass
     audio = Audio(music=True)
 
+    if await warning_screen(screen, clock, font, big, small) == "quit":
+        pygame.quit()
+        return
     if await title_screen(screen, clock, font, big, small, audio) == "quit":
         pygame.quit()
         return

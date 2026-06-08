@@ -36,6 +36,12 @@ game plays fully. It runs a bit slower than native, especially in late waves.
 
 [pygbag]: https://github.com/pygame-web/pygbag
 
+## Photosensitivity warning
+This game contains flashing lights and rapid visual effects. A small percentage
+of people may experience seizures when exposed to flashing lights or patterns.
+If you or anyone in your family has an epileptic condition, consult a doctor
+before playing. The game shows this warning at startup.
+
 ## Credits & license
 - Built with **[pygame](https://www.pygame.org/)** (LGPL) on **SDL2** (zlib). pygame
   is dynamically imported (not modified or statically bundled), so the game can be
