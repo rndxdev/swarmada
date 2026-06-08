@@ -180,6 +180,7 @@ class Audio:
         self.music = None
         self.music_on = music
         self.sfx_vol = 0.6
+        self.music_vol = 0.30
         try:
             pygame.mixer.init()
             pygame.mixer.set_num_channels(24)
@@ -310,7 +311,7 @@ class Audio:
         }
         try:
             self.music = self._build_music()
-            self.music.set_volume(0.30)
+            self.music.set_volume(self.music_vol)
             if self.music_on:
                 self.music_chan.play(self.music, loops=-1)
         except pygame.error:
@@ -356,6 +357,14 @@ class Audio:
             self.music_chan.play(self.music, loops=-1)
         else:
             self.music_chan.stop()
+
+    def set_sfx_vol(self, v):
+        self.sfx_vol = max(0.0, min(1.0, round(v, 2)))
+
+    def set_music_vol(self, v):
+        self.music_vol = max(0.0, min(1.0, round(v, 2)))
+        if self.music is not None:
+            self.music.set_volume(self.music_vol)
 
 
 # ---------------------------------------------------------------------------
@@ -1014,6 +1023,15 @@ def _touch_buttons():
             "fs": pygame.Rect(WIDTH - 44, 8, 34, 34)}
 
 
+def _vol_buttons():
+    """Tappable - / + buttons on the pause screen for music & sfx volume."""
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    return {"music_dn": pygame.Rect(cx - 140, cy + 36, 30, 28),
+            "music_up": pygame.Rect(cx + 110, cy + 36, 30, 28),
+            "sfx_dn": pygame.Rect(cx - 140, cy + 76, 30, 28),
+            "sfx_up": pygame.Rect(cx + 110, cy + 76, 30, 28)}
+
+
 def _levelup_cards(n):
     card_w, card_h, gap = 240, 150, 30
     total = card_w * n + gap * (n - 1)
@@ -1276,7 +1294,7 @@ class Game:
         shots = self.player.try_fire(self.enemies)
         if shots:
             self.projectiles.extend(shots)
-            self.sfx('shoot', 0.7)
+            self.sfx('shoot', 0.4)         # bolt fires often — keep it gentle
         for w in self.player.weapons:
             w.update(dt, self)
 
@@ -1681,6 +1699,8 @@ class Game:
             (["P"], "Pause"),
             (["F"], "Fullscreen"),
             (["M"], "Music"),
+            (["[", "]"], "SFX vol"),
+            (["-", "="], "Mus vol"),
             (["R"], "Restart"),
             (["Esc"], "Quit"),
         ]
@@ -1766,12 +1786,32 @@ class Game:
 
     def _draw_pause(self, s):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((10, 12, 20, 180))
+        overlay.fill((10, 12, 20, 190))
         s.blit(overlay, (0, 0))
+        cx, cy = WIDTH // 2, HEIGHT // 2
         title = self.big.render("PAUSED", True, WHITE)
-        s.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 60))
-        sub = self.font.render("progress autosaved  •  P / Esc to resume", True, DIM)
-        s.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT // 2 + 5))
+        s.blit(title, (cx - title.get_width() // 2, cy - 120))
+        s.blit(self.small.render("progress autosaved", True, DIM), (cx - 60, cy - 60))
+
+        a = self.audio
+        vb = _vol_buttons()
+        rows = [("MUSIC", int((a.music_vol if a else 0) * 100), vb["music_dn"], vb["music_up"], cy + 36),
+                ("SFX", int((a.sfx_vol if a else 0) * 100), vb["sfx_dn"], vb["sfx_up"], cy + 76)]
+        for label, val, dn, up, y in rows:
+            s.blit(self.font.render(label, True, WHITE), (cx - 210, y + 2))
+            for r, sym in ((dn, "-"), (up, "+")):
+                pygame.draw.rect(s, (40, 46, 64), r, border_radius=5)
+                pygame.draw.rect(s, (100, 110, 140), r, 1, border_radius=5)
+                g = self.font.render(sym, True, WHITE)
+                s.blit(g, (r.centerx - g.get_width() // 2, r.y + 2))
+            bx, bw = cx - 100, 200
+            pygame.draw.rect(s, (40, 40, 50), (bx, y + 6, bw, 16))
+            pygame.draw.rect(s, GEM_COL, (bx, y + 6, bw * val // 100, 16))
+            pygame.draw.rect(s, (10, 12, 20), (bx, y + 6, bw, 16), 1)
+            pct = self.small.render(f"{val}%", True, WHITE)
+            s.blit(pct, (bx + bw // 2 - pct.get_width() // 2, y + 7))
+        hint = self.font.render("P resume  •  Esc quit", True, DIM)
+        s.blit(hint, (cx - hint.get_width() // 2, cy + 122))
 
 
 # ---------------------------------------------------------------------------
@@ -2329,6 +2369,10 @@ async def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_F11:
                     _fullscreen()
+                elif event.key == pygame.K_ESCAPE:
+                    if game.state in ("play", "levelup"):
+                        save_game(game)            # keep progress so you can resume
+                    running = False
                 elif game.state == "enter_name":
                     if event.key == pygame.K_RETURN:
                         game.submit_score()
@@ -2339,20 +2383,20 @@ async def main():
                         game.name_input += event.unicode.upper()
                 elif event.key == pygame.K_f:
                     _fullscreen()
-                elif event.key == pygame.K_ESCAPE:
-                    if game.state == "play" and not game.paused:
-                        game.paused = True
-                        save_game(game)            # autosave on pause
-                    elif game.paused:
-                        game.paused = False
-                    else:
-                        running = False
                 elif event.key == pygame.K_p and game.state == "play":
                     game.paused = not game.paused
                     if game.paused:
                         save_game(game)            # autosave on pause
                 elif event.key == pygame.K_m:
                     audio.toggle_music()
+                elif event.key == pygame.K_LEFTBRACKET:
+                    audio.set_sfx_vol(audio.sfx_vol - 0.1)
+                elif event.key == pygame.K_RIGHTBRACKET:
+                    audio.set_sfx_vol(audio.sfx_vol + 0.1)
+                elif event.key == pygame.K_MINUS:
+                    audio.set_music_vol(audio.music_vol - 0.1)
+                elif event.key in (pygame.K_EQUALS, pygame.K_PLUS):
+                    audio.set_music_vol(audio.music_vol + 0.1)
                 elif event.key == pygame.K_r and game.state == "scores":
                     clear_save()
                     game.reset()
@@ -2377,7 +2421,17 @@ async def main():
                         if game.paused:
                             save_game(game)
                     elif game.paused:
-                        game.paused = False
+                        vb = _vol_buttons()
+                        if vb["music_dn"].collidepoint(p):
+                            audio.set_music_vol(audio.music_vol - 0.1)
+                        elif vb["music_up"].collidepoint(p):
+                            audio.set_music_vol(audio.music_vol + 0.1)
+                        elif vb["sfx_dn"].collidepoint(p):
+                            audio.set_sfx_vol(audio.sfx_vol - 0.1)
+                        elif vb["sfx_up"].collidepoint(p):
+                            audio.set_sfx_vol(audio.sfx_vol + 0.1)
+                        else:
+                            game.paused = False          # tap elsewhere resumes
                     else:                                # start virtual joystick
                         ptr_down, ptr_origin, ptr_pos = True, p, p
             elif event.type == pygame.MOUSEMOTION:
