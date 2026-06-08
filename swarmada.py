@@ -28,6 +28,7 @@ WIDTH, HEIGHT = 960, 600
 CENTER = Vector2(WIDTH / 2, HEIGHT / 2)
 FPS = 60
 TITLE = "Swarmada"
+IS_WEB = sys.platform == "emscripten"   # in a browser there's no window to "quit" to
 
 SPAWN_MIN, SPAWN_MAX = 640, 780     # enemies appear just off-screen
 CULL_DIST2 = 1200 ** 2              # despawn enemies you've left far behind
@@ -1781,7 +1782,8 @@ class Game:
         if not board:
             none = self.font.render("No scores yet — be the first!", True, DIM)
             s.blit(none, (WIDTH // 2 - none.get_width() // 2, 160))
-        hint = self.font.render("Press R to play again  •  Esc to quit", True, DIM)
+        msg = "Tap or press R to play again" if IS_WEB else "Press R to play again  •  Esc to quit"
+        hint = self.font.render(msg, True, DIM)
         s.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 50))
 
     def _draw_pause(self, s):
@@ -1810,7 +1812,7 @@ class Game:
             pygame.draw.rect(s, (10, 12, 20), (bx, y + 6, bw, 16), 1)
             pct = self.small.render(f"{val}%", True, WHITE)
             s.blit(pct, (bx + bw // 2 - pct.get_width() // 2, y + 7))
-        hint = self.font.render("P resume  •  Esc quit", True, DIM)
+        hint = self.font.render("P / Esc / tap to resume" if IS_WEB else "P resume  •  Esc quit", True, DIM)
         s.blit(hint, (cx - hint.get_width() // 2, cy + 122))
 
 
@@ -2201,8 +2203,8 @@ async def title_screen(screen, clock, font, big, small, audio):
                     _fullscreen()
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                     return "play"
-                if event.key == pygame.K_ESCAPE:
-                    return "quit"
+                if event.key == pygame.K_ESCAPE and not IS_WEB:
+                    return "quit"            # in a browser, Esc would just blank the canvas
                 if event.key == pygame.K_i:
                     if await codex_screen(screen, clock, font, big, small) == "quit":
                         return "quit"
@@ -2406,9 +2408,19 @@ async def main():
                 if event.key == pygame.K_F11:
                     _fullscreen()
                 elif event.key == pygame.K_ESCAPE:
-                    if game.state in ("play", "levelup"):
-                        save_game(game)            # keep progress so you can resume
-                    running = False
+                    if IS_WEB:
+                        # No window to quit to in a browser — reroute Esc.
+                        if game.state == "scores":
+                            clear_save()
+                            game.reset()
+                        elif game.state == "play":
+                            game.paused = not game.paused
+                            if game.paused:
+                                save_game(game)
+                    else:
+                        if game.state in ("play", "levelup"):
+                            save_game(game)        # keep progress so you can resume
+                        running = False
                 elif game.state == "enter_name":
                     if event.key == pygame.K_RETURN:
                         game.submit_score()
