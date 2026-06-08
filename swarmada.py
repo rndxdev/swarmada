@@ -1008,6 +1008,26 @@ def _fullscreen():
         pass
 
 
+def _touch_buttons():
+    """On-screen buttons (top-right), tappable on mobile and clickable on desktop."""
+    return {"pause": pygame.Rect(WIDTH - 86, 8, 34, 34),
+            "fs": pygame.Rect(WIDTH - 44, 8, 34, 34)}
+
+
+def _levelup_cards(n):
+    card_w, card_h, gap = 240, 150, 30
+    total = card_w * n + gap * (n - 1)
+    x0 = WIDTH // 2 - total // 2
+    return [pygame.Rect(x0 + i * (card_w + gap), 210, card_w, card_h) for i in range(n)]
+
+
+def _hit_card(pos, n):
+    for i, r in enumerate(_levelup_cards(n)):
+        if r.collidepoint(pos):
+            return i
+    return None
+
+
 def draw_starfield(surf, cam, tiles):
     surf.fill(BG)
     for tile, par in tiles:
@@ -1586,7 +1606,23 @@ class Game:
         s.blit(self.font.render(f"{mins:02d}:{secs:02d}", True, WHITE), (WIDTH // 2 - 28, 16))
         sc = self.big.render(f"{int(self.score)}", True, GOLD)
         s.blit(sc, (WIDTH // 2 - sc.get_width() // 2, 38))
-        s.blit(self.font.render(f"Kills {self.kills}", True, WHITE), (WIDTH - 130, 16))
+        s.blit(self.font.render(f"Kills {self.kills}", True, WHITE), (WIDTH - 130, 50))
+
+        # On-screen Pause / Fullscreen buttons (for touch; also clickable)
+        btns = _touch_buttons()
+        for key, r in btns.items():
+            pygame.draw.rect(s, (30, 36, 52), r, border_radius=6)
+            pygame.draw.rect(s, (90, 100, 130), r, 1, border_radius=6)
+        pr = btns["pause"]
+        if self.paused:
+            pygame.draw.polygon(s, WHITE, [(pr.x + 12, pr.y + 9), (pr.x + 12, pr.y + 25), (pr.x + 26, pr.y + 17)])
+        else:
+            pygame.draw.rect(s, WHITE, (pr.x + 11, pr.y + 9, 4, 16))
+            pygame.draw.rect(s, WHITE, (pr.x + 19, pr.y + 9, 4, 16))
+        fr = btns["fs"]
+        for cx, cy, dx, dy in [(11, 11, 1, 1), (23, 11, -1, 1), (11, 23, 1, -1), (23, 23, -1, -1)]:
+            pygame.draw.line(s, WHITE, (fr.x + cx, fr.y + cy), (fr.x + cx + 6 * dx, fr.y + cy), 2)
+            pygame.draw.line(s, WHITE, (fr.x + cx, fr.y + cy), (fr.x + cx, fr.y + cy + 6 * dy), 2)
 
         bosses = [e for e in self.enemies if e.is_boss and e.hp > 0]
         bw = 520
@@ -1667,23 +1703,17 @@ class Game:
         s.blit(overlay, (0, 0))
         title = self.big.render("LEVEL UP!", True, GOLD)
         s.blit(title, (WIDTH // 2 - title.get_width() // 2, 90))
-        hint = self.small.render("Press 1, 2, or 3 to choose", True, DIM)
+        hint = self.small.render("press 1 / 2 / 3  —  or tap a card", True, DIM)
         s.blit(hint, (WIDTH // 2 - hint.get_width() // 2, 150))
 
-        card_w, card_h, gap = 240, 150, 30
-        total = card_w * len(self.choices) + gap * (len(self.choices) - 1)
-        x0 = WIDTH // 2 - total // 2
-        y0 = 210
-        for i, (name, desc, _) in enumerate(self.choices):
-            x = x0 + i * (card_w + gap)
-            rect = pygame.Rect(x, y0, card_w, card_h)
+        for i, (rect, (name, desc, _)) in enumerate(zip(_levelup_cards(len(self.choices)), self.choices)):
             pygame.draw.rect(s, (30, 34, 50), rect, border_radius=10)
             pygame.draw.rect(s, GOLD, rect, 2, border_radius=10)
-            s.blit(self.big.render(str(i + 1), True, GOLD), (x + 16, y0 + 12))
+            s.blit(self.big.render(str(i + 1), True, GOLD), (rect.x + 16, rect.y + 12))
             nm = self.font.render(name, True, WHITE)
-            s.blit(nm, (x + card_w // 2 - nm.get_width() // 2, y0 + 60))
+            s.blit(nm, (rect.centerx - nm.get_width() // 2, rect.y + 60))
             ds = self.small.render(desc, True, GEM_COL)
-            s.blit(ds, (x + card_w // 2 - ds.get_width() // 2, y0 + 95))
+            s.blit(ds, (rect.centerx - ds.get_width() // 2, rect.y + 95))
 
     def _draw_enter_name(self, s):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -2031,6 +2061,8 @@ async def leaderboard_screen(screen, clock, font, big, small):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:     # tap to go back (mobile)
+                return "back"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_f, pygame.K_F11):
                     _fullscreen()
@@ -2211,12 +2243,14 @@ async def title_screen(screen, clock, font, big, small, audio):
         sub = font.render("hold the line against the alien swarm", True, GOLD)
         screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 172))
         if int(t * 2) % 2 == 0:
-            pr = big.render("PRESS  ENTER  TO  PLAY", True, GOLD)
-            screen.blit(pr, (WIDTH // 2 - pr.get_width() // 2, HEIGHT - 150))
+            pr = big.render("TAP  or  ENTER  to  PLAY", True, GOLD)
+            screen.blit(pr, (WIDTH // 2 - pr.get_width() // 2, HEIGHT - 156))
         hint = small.render("ENTER play  •  B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
-        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
+        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 64))
+        touch = small.render("touch: drag to move  •  tap cards to upgrade  •  ⏸ / ⛶ buttons", True, (95, 105, 128))
+        screen.blit(touch, (WIDTH // 2 - touch.get_width() // 2, HEIGHT - 44))
         cred = small.render("made with pygame (LGPL) + SDL", True, (70, 78, 96))
-        screen.blit(cred, (WIDTH // 2 - cred.get_width() // 2, HEIGHT - 26))
+        screen.blit(cred, (WIDTH // 2 - cred.get_width() // 2, HEIGHT - 24))
         pygame.display.flip()
         await asyncio.sleep(0)
 
@@ -2281,6 +2315,10 @@ async def main():
 
     fade = 255.0
     acc = 0.0
+    ptr_down = False
+    ptr_origin = Vector2(0, 0)
+    ptr_pos = Vector2(0, 0)
+    tap_choice = 0
     running = True
     while running:
         frame_dt = clock.tick(FPS) / 1000.0
@@ -2319,10 +2357,49 @@ async def main():
                     clear_save()
                     game.reset()
 
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                p = Vector2(event.pos)
+                if game.state == "enter_name":
+                    game.submit_score()                 # tap to submit (mobile: no keyboard)
+                elif game.state == "scores":
+                    clear_save()
+                    game.reset()
+                elif game.state == "levelup":
+                    idx = _hit_card(p, len(game.choices))
+                    if idx is not None:
+                        tap_choice = (IN_C1, IN_C2, IN_C3)[idx]
+                elif game.state == "play":
+                    b = _touch_buttons()
+                    if b["fs"].collidepoint(p):
+                        _fullscreen()
+                    elif b["pause"].collidepoint(p):
+                        game.paused = not game.paused
+                        if game.paused:
+                            save_game(game)
+                    elif game.paused:
+                        game.paused = False
+                    else:                                # start virtual joystick
+                        ptr_down, ptr_origin, ptr_pos = True, p, p
+            elif event.type == pygame.MOUSEMOTION:
+                ptr_pos = Vector2(event.pos)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                ptr_down = False
+
         # Fixed-timestep deterministic simulation. Cap catch-up steps so a slow
         # frame (esp. in the browser) can't spiral into more steps -> slower.
         acc = min(acc + frame_dt, 0.25)
         mask = input_mask(pygame.key.get_pressed())
+        if ptr_down and game.state == "play" and not game.paused:
+            d = ptr_pos - ptr_origin                    # drag = virtual joystick (8-way)
+            if d.x > 14:
+                mask |= IN_RIGHT
+            elif d.x < -14:
+                mask |= IN_LEFT
+            if d.y > 14:
+                mask |= IN_DOWN
+            elif d.y < -14:
+                mask |= IN_UP
+        mask |= tap_choice
         steps = 0
         while acc >= SIM_DT and steps < 6:
             if not game.paused and game.state in ("play", "levelup"):
@@ -2333,6 +2410,7 @@ async def main():
                 break
         if acc > SIM_DT:
             acc = SIM_DT            # drop backlog -> graceful slow-mo, never a death spiral
+        tap_choice = 0
 
         game.draw()
         if fade > 0:
@@ -2349,11 +2427,13 @@ async def main():
 async def resume_prompt(screen, big, font):
     """Tiny C/N prompt at startup when an autosave exists."""
     title = big.render("CONTINUE RUN?", True, GOLD)
-    hint = font.render("C  continue saved run     N  new game", True, WHITE)
+    hint = font.render("C / tap = continue       N = new game", True, WHITE)
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            if event.type == pygame.MOUSEBUTTONDOWN:     # tap = continue (mobile)
+                return True
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_f, pygame.K_F11):
                     _fullscreen()
