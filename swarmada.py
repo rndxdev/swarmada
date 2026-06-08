@@ -84,16 +84,19 @@ class Assets:
     def ensure(self):
         import make_assets
         self.names = list(make_assets.MAKERS)
-        missing = [n for n in self.names
-                   if not os.path.exists(os.path.join(ASSET_DIR, n + ".png"))]
-        if missing:
-            make_assets.generate(ASSET_DIR)
+        try:
+            missing = [n for n in self.names
+                       if not os.path.exists(os.path.join(ASSET_DIR, n + ".png"))]
+            if missing:
+                make_assets.generate(ASSET_DIR)
+        except Exception:
+            pass            # browser sandbox may block writes; fall back to shape art
 
     def load_one(self, name):
         path = os.path.join(ASSET_DIR, name + ".png")
         try:
             self.images[name] = pygame.image.load(path).convert_alpha()
-        except (pygame.error, FileNotFoundError):
+        except Exception:
             self.images[name] = None
 
     def get(self, name):
