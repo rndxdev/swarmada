@@ -991,6 +991,17 @@ def build_star_tiles():
 
 
 def _fullscreen():
+    if sys.platform == "emscripten":
+        # Browsers: ask the canvas itself to go fullscreen (toggle_fullscreen is a no-op).
+        try:
+            import platform as _pf
+            doc = _pf.window.document
+            cv = getattr(_pf.window, "canvas", None) or doc.getElementById("canvas") \
+                or doc.querySelector("canvas")
+            cv.requestFullscreen()
+        except Exception:
+            pass
+        return
     try:
         pygame.display.toggle_fullscreen()
     except pygame.error:
@@ -2308,15 +2319,20 @@ async def main():
                     clear_save()
                     game.reset()
 
-        # Fixed-timestep deterministic simulation
+        # Fixed-timestep deterministic simulation. Cap catch-up steps so a slow
+        # frame (esp. in the browser) can't spiral into more steps -> slower.
         acc = min(acc + frame_dt, 0.25)
         mask = input_mask(pygame.key.get_pressed())
-        while acc >= SIM_DT:
+        steps = 0
+        while acc >= SIM_DT and steps < 6:
             if not game.paused and game.state in ("play", "levelup"):
                 game.step(mask)
             acc -= SIM_DT
+            steps += 1
             if game.state == "enter_name":
                 break
+        if acc > SIM_DT:
+            acc = SIM_DT            # drop backlog -> graceful slow-mo, never a death spiral
 
         game.draw()
         if fade > 0:
