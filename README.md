@@ -29,10 +29,11 @@ Then host the **contents of `build/web/`** anywhere static:
 
 Test it locally first: `python -m pygbag main.py` then open http://localhost:8000.
 
-Notes for the web version: the local leaderboard, autosave/resume, and the
-global leaderboard don't persist/submit inside the browser sandbox (they no-op
-safely); audio falls back to silent if the browser can't synthesize it. The core
-game plays fully. It runs a bit slower than native, especially in late waves.
+Notes for the web version: the local leaderboard and autosave/resume persist via
+the browser's localStorage (survive reloads). The global leaderboard isn't
+submitted from the browser sandbox (no-ops safely); audio falls back to silent if
+the browser can't synthesize it. The core game plays fully. It runs a bit slower
+than native, especially in late waves.
 
 [pygbag]: https://github.com/pygame-web/pygbag
 

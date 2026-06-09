@@ -104,57 +104,98 @@ class Assets:
         return self.images.get(name)
 
 
-SCORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scores.json")
-
-
-def load_scores():
-    try:
-        with open(SCORES_FILE) as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (OSError, ValueError):
-        return []
-
-
-def save_scores(scores):
-    try:
-        with open(SCORES_FILE, "w") as f:
-            json.dump(scores, f, indent=2)
-    except OSError:
-        pass
-
-
-SAVE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "savegame.json")
+_DIR = os.path.dirname(os.path.abspath(__file__))
+SCORES_FILE = os.path.join(_DIR, "scores.json")
+SAVE_FILE = os.path.join(_DIR, "savegame.json")
 # Optional global leaderboard server (your VPS). Set SWARMADA_SERVER=http://host:port
 SERVER_URL = os.environ.get("SWARMADA_SERVER", "").rstrip("/")
 
 
-def save_game(game):
-    """Autosave an in-progress run as its seed + inputs (deterministic resume)."""
+# Persistence: files on desktop; browser localStorage on web (survives reloads).
+def _store_read(key):
+    if IS_WEB:
+        try:
+            import platform
+            v = platform.window.localStorage.getItem("swarmada_" + key)
+            return None if v is None else str(v)
+        except Exception:
+            return None
+    path = SCORES_FILE if key == "scores" else SAVE_FILE
     try:
-        with open(SAVE_FILE, "w") as f:
-            json.dump({"v": SIM_VERSION, "seed": game.seed, "steps": game.replay,
-                       "score": int(game.score), "round": game.round}, f)
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _store_write(key, text):
+    if IS_WEB:
+        try:
+            import platform
+            platform.window.localStorage.setItem("swarmada_" + key, text)
+        except Exception:
+            pass
+        return
+    path = SCORES_FILE if key == "scores" else SAVE_FILE
+    try:
+        with open(path, "w") as f:
+            f.write(text)
     except OSError:
         pass
 
 
-def load_save():
+def _store_clear(key):
+    if IS_WEB:
+        try:
+            import platform
+            platform.window.localStorage.removeItem("swarmada_" + key)
+        except Exception:
+            pass
+        return
+    path = SCORES_FILE if key == "scores" else SAVE_FILE
     try:
-        with open(SAVE_FILE) as f:
-            data = json.load(f)
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def load_scores():
+    txt = _store_read("scores")
+    if not txt:
+        return []
+    try:
+        data = json.loads(txt)
+        return data if isinstance(data, list) else []
+    except ValueError:
+        return []
+
+
+def save_scores(scores):
+    _store_write("scores", json.dumps(scores))
+
+
+def save_game(game):
+    """Autosave an in-progress run as its seed + inputs (deterministic resume)."""
+    _store_write("save", json.dumps({"v": SIM_VERSION, "seed": game.seed,
+                                     "steps": game.replay, "score": int(game.score),
+                                     "round": game.round}))
+
+
+def load_save():
+    txt = _store_read("save")
+    if not txt:
+        return None
+    try:
+        data = json.loads(txt)
         if data.get("v") == SIM_VERSION and data.get("steps"):
             return data
-    except (OSError, ValueError):
+    except ValueError:
         pass
     return None
 
 
 def clear_save():
-    try:
-        os.remove(SAVE_FILE)
-    except OSError:
-        pass
+    _store_clear("save")
 
 
 def blit_sprite(surf, spr, sp, angle=0.0, flash=False):
