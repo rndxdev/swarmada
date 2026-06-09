@@ -1988,6 +1988,21 @@ async def fetch_global_web():
     return data.get("leaderboard") if isinstance(data, dict) else None
 
 
+async def _fetch_global_bg(state):
+    """Background: fill the leaderboard view's board once the fetch returns."""
+    g = await fetch_global_web()
+    state["done"] = True
+    if g is not None:
+        state["board"], state["is_global"] = g, True
+
+
+async def _submit_global_bg(game, replay):
+    """Background: submit a finished run, then swap the score screen to global."""
+    g = await submit_global_web(replay)
+    if g is not None:
+        game.global_scores = g
+
+
 async def load_assets(screen, big, small):
     """Smoothly load every bitmap asset, drawing a progress bar as we go."""
     art = Assets()
@@ -2205,11 +2220,14 @@ async def leaderboard_screen(screen, clock, font, big, small):
     server is configured). Returns 'back'/'quit'."""
     tiles = build_star_tiles()
     cam = Vector2(0, 0)
-    gscores = None
+    state = {"board": load_scores(), "is_global": False, "done": False}   # show local instantly
     if SERVER_URL:
-        gscores = await fetch_global_web() if IS_WEB else fetch_global()
-    is_global = gscores is not None
-    board = gscores if is_global else load_scores()
+        if IS_WEB:
+            asyncio.ensure_future(_fetch_global_bg(state))  # non-blocking; updates when ready
+        else:
+            g = fetch_global()
+            if g is not None:
+                state["board"], state["is_global"] = g, True
 
     while True:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
@@ -2224,11 +2242,17 @@ async def leaderboard_screen(screen, clock, font, big, small):
                 if event.key in (pygame.K_ESCAPE, pygame.K_b, pygame.K_BACKSPACE, pygame.K_RETURN):
                     return "back"
 
+        board, is_global = state["board"], state["is_global"]
         cam += Vector2(16, 6) * dt
         draw_starfield(screen, cam, tiles)
         title = big.render("LEADERBOARD", True, GOLD)
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 44))
-        label = "global (verified)" if is_global else "local"
+        if is_global:
+            label = "global (verified)"
+        elif SERVER_URL and IS_WEB and not state["done"]:
+            label = "connecting..."
+        else:
+            label = "local"
         lab = small.render(label, True, GEM_COL if is_global else DIM)
         screen.blit(lab, (WIDTH // 2 - lab.get_width() // 2, 96))
 
@@ -2627,11 +2651,11 @@ async def run_game(screen, clock, game, audio, font, big, small):
             elif event.type == pygame.MOUSEBUTTONUP:
                 ptr_down = False
 
-        # Submit a finished run to the global board (browser: async JS fetch)
+        # Submit a finished run to the global board (browser: async, non-blocking)
         if game.pending_replay is not None:
             rp = game.pending_replay
             game.pending_replay = None
-            game.global_scores = await submit_global_web(rp)
+            asyncio.ensure_future(_submit_global_bg(game, rp))
 
         # Fixed-timestep deterministic simulation. Cap catch-up steps so a slow
         # frame (esp. in the browser) can't spiral into more steps -> slower.
