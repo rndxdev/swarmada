@@ -1217,6 +1217,7 @@ class Game:
         self.last_entry = None
         self.global_scores = None
         self.score_msg = ""
+        self.submitting = False
         self.pending_replay = None
         self.paused = False
         self.spawn_timer = 0.0
@@ -1673,10 +1674,12 @@ class Game:
         # Global leaderboard (best-effort; verified server-side via replay)
         self.global_scores = None
         self.score_msg = ""
+        self.submitting = False
         self.pending_replay = None
         if SERVER_URL:
             if IS_WEB:
                 self.pending_replay = self.make_replay(name)   # async-submitted by run_game
+                self.submitting = True
             else:
                 self.global_scores = submit_global(self.make_replay(name))
         self.state = "scores"
@@ -1886,8 +1889,13 @@ class Game:
 
         is_global = self.global_scores is not None
         board = self.global_scores if is_global else self.scores
-        label = "🌐 global (verified)" if is_global else "(local)"
-        lab = self.small.render(label, True, GEM_COL if is_global else DIM)
+        if is_global:
+            label = "global (verified)"
+        elif self.submitting:
+            label = "submitting score, verifying run..."
+        else:
+            label = "(local)"
+        lab = self.small.render(label, True, GEM_COL if is_global else GOLD if self.submitting else DIM)
         s.blit(lab, (WIDTH // 2 - lab.get_width() // 2, 100))
 
         x = WIDTH // 2 - 240
@@ -2027,7 +2035,7 @@ def _req_handler():
 async def submit_global_web(replay):
     global _LAST_FETCH_ERR
     try:
-        text = await asyncio.wait_for(_req_handler().post(SERVER_URL + "/submit", replay), 10)
+        text = await asyncio.wait_for(_req_handler().post(SERVER_URL + "/submit", replay), 30)
         data = json.loads(str(text))
         _LAST_FETCH_ERR = ""
         return data if isinstance(data, dict) else None
@@ -2072,6 +2080,12 @@ async def _submit_global_bg(game, replay):
             game.global_scores = data["leaderboard"]
         elif data.get("error"):
             game.score_msg = str(data["error"])
+    elif data is None:
+        # Submit response didn't arrive in time; fetch the board so the score still shows.
+        g = await fetch_global_web()
+        if g is not None:
+            game.global_scores = g
+    game.submitting = False
 
 
 async def load_assets(screen, big, small):
