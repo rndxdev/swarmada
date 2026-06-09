@@ -1949,43 +1949,48 @@ def fetch_global():
 
 
 _LAST_FETCH_ERR = ""
+_REQ = None
 
 
-async def _web_fetch_json(url, method="GET", body=None):
-    """Browser HTTP via JS fetch (WASM has no sockets). A plain-body POST with no
-    custom headers is a CORS 'simple request' -> no preflight needed. Fully
-    guarded (never raises, never hangs) so the UI can't crash on it."""
+def _req_handler():
+    """pygbag's WASM HTTP helper (drives JS fetch via platform.jsiter). Web only."""
+    global _REQ
+    if _REQ is None:
+        from aio.fetch import RequestHandler   # provided by pygbag at runtime
+        _REQ = RequestHandler()
+    return _REQ
+
+
+async def submit_global_web(replay):
     global _LAST_FETCH_ERR
     try:
-        import platform
-        win = platform.window
-        if method == "POST":
-            opts = win.Object.new()
-            opts.method = "POST"
-            opts.body = body
-            resp = await asyncio.wait_for(win.fetch(url, opts), 8)
-        else:
-            resp = await asyncio.wait_for(win.fetch(url), 8)
-        text = await asyncio.wait_for(resp.text(), 8)
+        text = await asyncio.wait_for(_req_handler().post(SERVER_URL + "/submit", replay), 10)
+        data = json.loads(str(text))
         _LAST_FETCH_ERR = ""
-        return json.loads(str(text))
+        return data.get("leaderboard") if isinstance(data, dict) else None
     except BaseException as e:
         _LAST_FETCH_ERR = repr(e)[:150]
         try:
-            print("swarmada: web fetch failed:", repr(e))
+            print("swarmada: web POST failed:", repr(e))
         except Exception:
             pass
         return None
 
 
-async def submit_global_web(replay):
-    data = await _web_fetch_json(SERVER_URL + "/submit", "POST", json.dumps(replay))
-    return data.get("leaderboard") if isinstance(data, dict) else None
-
-
 async def fetch_global_web():
-    data = await _web_fetch_json(SERVER_URL + "/leaderboard")
-    return data.get("leaderboard") if isinstance(data, dict) else None
+    global _LAST_FETCH_ERR
+    try:
+        text = await asyncio.wait_for(_req_handler().get(SERVER_URL + "/leaderboard"), 10)
+        data = json.loads(str(text))
+        _LAST_FETCH_ERR = ""
+        return data.get("leaderboard") if isinstance(data, dict) else None
+    except BaseException as e:
+        _LAST_FETCH_ERR = repr(e)[:150]
+        try:
+            print("swarmada: web GET failed:", repr(e))
+        except Exception:
+            pass
+        return None
 
 
 async def _fetch_global_bg(state):
