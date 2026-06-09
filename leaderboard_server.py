@@ -102,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?")[0] != "/submit":
             return self._json(404, {"error": "not found"})
-        ip = self.client_address[0]
+        # Behind nginx the socket IP is 127.0.0.1; use the real client from XFF.
+        ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
         if not _rate_ok(ip):
             return self._json(429, {"error": "rate limited"})
         length = int(self.headers.get("Content-Length", 0))
