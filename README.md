@@ -96,12 +96,31 @@ WantedBy=multi-user.target
 ```
 Put it behind nginx/caddy for TLS if you want `https://`.
 
-### Point the game at it
+### Point the DESKTOP game at it
 ```bash
-SWARMADA_SERVER=http://YOUR_VPS_IP:8000 ./.venv/bin/python swarmada.py
+SWARMADA_SERVER=https://your.vps ./.venv/bin/python swarmada.py
 ```
 On death the run is submitted; the leaderboard screen then shows the verified
 **global** board. Without `SWARMADA_SERVER` set, it just uses the local board.
+
+### Make the BROWSER build use it (HTTPS required)
+The browser fetches the board via JS `fetch`, so two things matter:
+1. **The server must be HTTPS.** A page served from `https://` (GitHub Pages) is
+   blocked from calling an `http://` server (mixed content). Put the server behind
+   TLS — easiest is **Caddy** (automatic certificates), given a domain pointing at
+   your VPS:
+   ```bash
+   caddy reverse-proxy --from https://your.domain --to 127.0.0.1:8000
+   ```
+   (or a **Cloudflare Tunnel**, which gives you an `https://` URL with no domain/port setup).
+   The browser sends the score as a plain-body POST (a CORS "simple request"), so
+   no extra server config is needed — the server already returns `Access-Control-Allow-Origin: *`.
+2. **Bake the URL into the web build** (browsers have no env vars):
+   ```bash
+   SWARMADA_SERVER=https://your.domain ./build_web.sh
+   ```
+   then redeploy `docs/`. That writes `server_config.py` into the bundle so the
+   web build knows where to submit/fetch.
 
 ### Endpoints
 - `POST /submit` — body is a replay JSON; verifies + stores; returns `{ok, leaderboard}`.

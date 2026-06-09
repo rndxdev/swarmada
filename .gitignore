@@ -20,5 +20,8 @@ build/
 *.apk
 *.tar.gz
 
+# Baked server URL (personal)
+server_config.py
+
 # OS
 .DS_Store

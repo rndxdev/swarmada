@@ -19,6 +19,13 @@ mkdir -p "$STAGE"
 cp main.py swarmada.py make_assets.py "$STAGE"/
 cp -r assets "$STAGE"/assets
 
+# Bake the global leaderboard URL into the web build (browsers have no env vars).
+# Usage:  SWARMADA_SERVER=https://your.vps ./build_web.sh
+if [ -n "${SWARMADA_SERVER:-}" ]; then
+  printf 'SERVER_URL = "%s"\n' "$SWARMADA_SERVER" > "$STAGE/server_config.py"
+  echo "Baked global leaderboard URL: $SWARMADA_SERVER"
+fi
+
 "$PY" -m pygbag --build --title "Swarmada" "$STAGE/main.py"
 
 rm -rf build

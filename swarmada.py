@@ -107,8 +107,15 @@ class Assets:
 _DIR = os.path.dirname(os.path.abspath(__file__))
 SCORES_FILE = os.path.join(_DIR, "scores.json")
 SAVE_FILE = os.path.join(_DIR, "savegame.json")
-# Optional global leaderboard server (your VPS). Set SWARMADA_SERVER=http://host:port
+# Global leaderboard server (your VPS). Desktop: set env SWARMADA_SERVER=https://host
+# Web: build_web.sh bakes it into server_config.py (browsers have no env vars).
 SERVER_URL = os.environ.get("SWARMADA_SERVER", "").rstrip("/")
+if not SERVER_URL:
+    try:
+        import server_config
+        SERVER_URL = str(server_config.SERVER_URL).rstrip("/")
+    except Exception:
+        pass
 
 
 # Persistence: files on desktop; browser localStorage on web (survives reloads).
@@ -1160,6 +1167,7 @@ class Game:
         self.scores = []
         self.last_entry = None
         self.global_scores = None
+        self.pending_replay = None
         self.paused = False
         self.spawn_timer = 0.0
         self.boss_index = 0
@@ -1613,8 +1621,12 @@ class Game:
         clear_save()                       # run is over
         # Global leaderboard (best-effort; verified server-side via replay)
         self.global_scores = None
+        self.pending_replay = None
         if SERVER_URL:
-            self.global_scores = submit_global(self.make_replay(name))
+            if IS_WEB:
+                self.pending_replay = self.make_replay(name)   # async-submitted by run_game
+            else:
+                self.global_scores = submit_global(self.make_replay(name))
         self.state = "scores"
 
     # -- drawing ------------------------------------------------------------
@@ -1936,6 +1948,35 @@ def fetch_global():
         return None
 
 
+async def _web_fetch_json(url, method="GET", body=None):
+    """Browser HTTP via JS fetch (WASM has no sockets). A plain-body POST with no
+    custom headers is a CORS 'simple request' -> no preflight needed. Best-effort."""
+    try:
+        import platform
+        win = platform.window
+        if method == "POST":
+            opts = win.Object.new()
+            opts.method = "POST"
+            opts.body = body
+            resp = await win.fetch(url, opts)
+        else:
+            resp = await win.fetch(url)
+        text = await resp.text()
+        return json.loads(str(text))
+    except Exception:
+        return None
+
+
+async def submit_global_web(replay):
+    data = await _web_fetch_json(SERVER_URL + "/submit", "POST", json.dumps(replay))
+    return data.get("leaderboard") if isinstance(data, dict) else None
+
+
+async def fetch_global_web():
+    data = await _web_fetch_json(SERVER_URL + "/leaderboard")
+    return data.get("leaderboard") if isinstance(data, dict) else None
+
+
 async def load_assets(screen, big, small):
     """Smoothly load every bitmap asset, drawing a progress bar as we go."""
     art = Assets()
@@ -2153,7 +2194,9 @@ async def leaderboard_screen(screen, clock, font, big, small):
     server is configured). Returns 'back'/'quit'."""
     tiles = build_star_tiles()
     cam = Vector2(0, 0)
-    gscores = fetch_global() if SERVER_URL else None
+    gscores = None
+    if SERVER_URL:
+        gscores = await fetch_global_web() if IS_WEB else fetch_global()
     is_global = gscores is not None
     board = gscores if is_global else load_scores()
 
@@ -2569,6 +2612,12 @@ async def run_game(screen, clock, game, audio, font, big, small):
                 ptr_pos = Vector2(event.pos)
             elif event.type == pygame.MOUSEBUTTONUP:
                 ptr_down = False
+
+        # Submit a finished run to the global board (browser: async JS fetch)
+        if game.pending_replay is not None:
+            rp = game.pending_replay
+            game.pending_replay = None
+            game.global_scores = await submit_global_web(rp)
 
         # Fixed-timestep deterministic simulation. Cap catch-up steps so a slow
         # frame (esp. in the browser) can't spiral into more steps -> slower.
