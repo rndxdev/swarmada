@@ -1033,6 +1033,18 @@ def _vol_buttons():
             "sfx_up": pygame.Rect(cx + 110, cy + 76, 30, 28)}
 
 
+def _pause_buttons():
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    return {"resume": pygame.Rect(cx - 184, cy + 116, 170, 40),
+            "menu": pygame.Rect(cx + 14, cy + 116, 170, 40)}
+
+
+def _title_buttons():
+    cx = WIDTH // 2
+    return {"continue": pygame.Rect(cx - 150, HEIGHT - 192, 300, 46),
+            "new": pygame.Rect(cx - 150, HEIGHT - 138, 300, 46)}
+
+
 def _levelup_cards(n):
     card_w, card_h, gap = 240, 150, 30
     total = card_w * n + gap * (n - 1)
@@ -1703,7 +1715,7 @@ class Game:
             (["[", "]"], "SFX vol"),
             (["-", "="], "Mus vol"),
             (["R"], "Restart"),
-            (["Esc"], "Quit"),
+            (["Esc"], "Pause/Menu"),
         ]
         rowh = 22
         pw, ph = 196, len(rows) * rowh + 10
@@ -1812,8 +1824,14 @@ class Game:
             pygame.draw.rect(s, (10, 12, 20), (bx, y + 6, bw, 16), 1)
             pct = self.small.render(f"{val}%", True, WHITE)
             s.blit(pct, (bx + bw // 2 - pct.get_width() // 2, y + 7))
-        hint = self.font.render("P / Esc / tap to resume" if IS_WEB else "P resume  •  Esc quit", True, DIM)
-        s.blit(hint, (cx - hint.get_width() // 2, cy + 122))
+
+        pb = _pause_buttons()
+        for key, label in (("resume", "Resume"), ("menu", "Quit to Menu")):
+            r = pb[key]
+            pygame.draw.rect(s, (34, 40, 58), r, border_radius=8)
+            pygame.draw.rect(s, GOLD, r, 2, border_radius=8)
+            t = self.font.render(label, True, WHITE)
+            s.blit(t, (r.centerx - t.get_width() // 2, r.centery - t.get_height() // 2))
 
 
 # ---------------------------------------------------------------------------
@@ -2175,6 +2193,7 @@ async def title_screen(screen, clock, font, big, small, audio):
     tiles = build_star_tiles()
     huge = pygame.font.SysFont("menlo,consolas,monospace", 72, bold=True)
     enemy_sprites = ["enemy_grunt", "enemy_runner", "enemy_brute"]
+    has_save = load_save() is not None
 
     cam = Vector2(0, 0)
     scroll = Vector2(70, 18)
@@ -2197,11 +2216,22 @@ async def title_screen(screen, clock, font, big, small, audio):
             if event.type == pygame.QUIT:
                 return "quit"
             if event.type == pygame.MOUSEBUTTONDOWN:
-                return "play"
+                if has_save:
+                    tb = _title_buttons()
+                    if tb["continue"].collidepoint(event.pos):
+                        return "continue"
+                    if tb["new"].collidepoint(event.pos):
+                        return "play"
+                else:
+                    return "play"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_f, pygame.K_F11):
                     _fullscreen()
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                    return "continue" if has_save else "play"
+                if event.key == pygame.K_c and has_save:
+                    return "continue"
+                if event.key == pygame.K_n:
                     return "play"
                 if event.key == pygame.K_ESCAPE and not IS_WEB:
                     return "quit"            # in a browser, Esc would just blank the canvas
@@ -2317,10 +2347,18 @@ async def title_screen(screen, clock, font, big, small, audio):
         screen.blit(title, (tx, 90))
         sub = font.render("hold the line against the alien swarm", True, GOLD)
         screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 172))
-        if int(t * 2) % 2 == 0:
+        if has_save:
+            tb = _title_buttons()
+            for key, label in (("continue", "CONTINUE  (Enter)"), ("new", "NEW GAME  (N)")):
+                r = tb[key]
+                pygame.draw.rect(screen, (34, 40, 58), r, border_radius=8)
+                pygame.draw.rect(screen, GOLD, r, 2, border_radius=8)
+                tt = font.render(label, True, WHITE)
+                screen.blit(tt, (r.centerx - tt.get_width() // 2, r.centery - tt.get_height() // 2))
+        elif int(t * 2) % 2 == 0:
             pr = big.render("TAP  or  ENTER  to  PLAY", True, GOLD)
             screen.blit(pr, (WIDTH // 2 - pr.get_width() // 2, HEIGHT - 156))
-        hint = small.render("ENTER play  •  B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
+        hint = small.render("B scores  •  I codex  •  L lore  •  F fullscreen  •  M music", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 64))
         touch = small.render("touch: drag to move  •  tap cards to upgrade  •  ⏸ / ⛶ buttons", True, (95, 105, 128))
         screen.blit(touch, (WIDTH // 2 - touch.get_width() // 2, HEIGHT - 44))
@@ -2356,23 +2394,26 @@ async def main():
     if await warning_screen(screen, clock, font, big, small) == "quit":
         pygame.quit()
         return
-    if await title_screen(screen, clock, font, big, small, audio) == "quit":
-        pygame.quit()
-        return
+    while True:                          # ---- MAIN MENU loop ----
+        choice = await title_screen(screen, clock, font, big, small, audio)
+        if choice == "quit":
+            break
+        game = Game(screen, font, big, small, audio)
+        if choice == "continue":
+            sv = load_save()
+            if sv:
+                msg = font.render("Restoring run...", True, WHITE)
+                screen.fill(BG)
+                screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+                pygame.display.flip()
+                resume_game(game, sv)
+        if await run_game(screen, clock, game, audio, font, big, small) == "quit":
+            break
+    pygame.quit()
 
-    game = Game(screen, font, big, small, audio)
 
-    # Offer to continue an autosaved run
-    save = load_save()
-    if save and await resume_prompt(screen, big, font):
-        msg = font.render("Restoring run...", True, WHITE)
-        screen.fill(BG)
-        screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
-        pygame.display.flip()
-        resume_game(game, save)
-    else:
-        clear_save()
-
+async def run_game(screen, clock, game, audio, font, big, small):
+    """Play one session. Returns 'menu' (back to title) or 'quit' (exit app)."""
     def input_mask(keys):
         m = 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
@@ -2397,30 +2438,23 @@ async def main():
     ptr_origin = Vector2(0, 0)
     ptr_pos = Vector2(0, 0)
     tap_choice = 0
-    running = True
-    while running:
+    while True:
         frame_dt = clock.tick(FPS) / 1000.0
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                return "quit"
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_F11:
                     _fullscreen()
                 elif event.key == pygame.K_ESCAPE:
-                    if IS_WEB:
-                        # No window to quit to in a browser — reroute Esc.
-                        if game.state == "scores":
-                            clear_save()
-                            game.reset()
-                        elif game.state == "play":
-                            game.paused = not game.paused
-                            if game.paused:
-                                save_game(game)
+                    if game.state == "play" and not game.paused:
+                        game.paused = True
+                        save_game(game)            # Esc in play -> pause
                     else:
                         if game.state in ("play", "levelup"):
-                            save_game(game)        # keep progress so you can resume
-                        running = False
+                            save_game(game)        # keep progress; Esc again -> menu
+                        return "menu"
                 elif game.state == "enter_name":
                     if event.key == pygame.K_RETURN:
                         game.submit_score()
@@ -2435,6 +2469,9 @@ async def main():
                     game.paused = not game.paused
                     if game.paused:
                         save_game(game)            # autosave on pause
+                elif event.key == pygame.K_q and game.paused:
+                    save_game(game)
+                    return "menu"                  # save & quit to main menu
                 elif event.key == pygame.K_m:
                     audio.toggle_music()
                 elif event.key == pygame.K_LEFTBRACKET:
@@ -2469,8 +2506,13 @@ async def main():
                         if game.paused:
                             save_game(game)
                     elif game.paused:
-                        vb = _vol_buttons()
-                        if vb["music_dn"].collidepoint(p):
+                        pb, vb = _pause_buttons(), _vol_buttons()
+                        if pb["menu"].collidepoint(p):
+                            save_game(game)
+                            return "menu"                # Save & Quit to Menu
+                        elif pb["resume"].collidepoint(p):
+                            game.paused = False
+                        elif vb["music_dn"].collidepoint(p):
                             audio.set_music_vol(audio.music_vol - 0.1)
                         elif vb["music_up"].collidepoint(p):
                             audio.set_music_vol(audio.music_vol + 0.1)
@@ -2522,8 +2564,6 @@ async def main():
             screen.blit(ov, (0, 0))
         pygame.display.flip()
         await asyncio.sleep(0)
-
-    pygame.quit()
 
 
 async def resume_prompt(screen, big, font):
