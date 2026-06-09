@@ -25,3 +25,4 @@ server_config.py
 
 # OS
 .DS_Store
+token.dat

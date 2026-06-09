@@ -17,6 +17,7 @@ players' copy — the simulation (and SIM_VERSION) must match, or valid
 replays will be rejected.
 """
 
+import hashlib
 import json
 import os
 import threading
@@ -43,17 +44,38 @@ def _load():
         return []
 
 
-def _store(entry):
+def _public(board):
+    """Board view without the private owner hashes."""
+    return [{k: v for k, v in e.items() if k != "owner"} for e in board[:TOP_N]]
+
+
+def _store(entry, owner):
+    """Name ownership: a name belongs to the token that first claimed it. Returns
+    the public board, or None if the name is owned by a different player."""
     with _lock:
         board = _load()
-        board.append(entry)
+        name_l = entry["name"].lower()
+        existing = next((e for e in board if str(e.get("name", "")).lower() == name_l), None)
+        if existing is not None:
+            owned_by = existing.get("owner")
+            if owned_by and owned_by != owner:
+                return None                      # taken by someone else
+            entry["owner"] = owned_by or owner
+            if entry["score"] <= existing.get("score", 0):
+                existing["owner"] = entry["owner"]   # keep their better score
+            else:
+                board.remove(existing)
+                board.append(entry)
+        else:
+            entry["owner"] = owner
+            board.append(entry)
         board.sort(key=lambda e: e.get("score", 0), reverse=True)
         board = board[:TOP_N]
         tmp = DB_FILE + ".tmp"
         with open(tmp, "w") as f:
             json.dump(board, f)
         os.replace(tmp, DB_FILE)        # atomic write
-        return board
+        return _public(board)
 
 
 def _rate_ok(ip):
@@ -95,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0] == "/leaderboard":
-            self._json(200, {"leaderboard": _load()[:TOP_N]})
+            self._json(200, {"leaderboard": _public(_load())})
         else:
             self._json(404, {"error": "not found"})
 
@@ -119,17 +141,22 @@ class Handler(BaseHTTPRequestHandler):
 
         ok, recomputed = hs.verify_replay(replay)
         if not ok:
-            # Score didn't reproduce -> reject (forged or wrong game version)
-            return self._json(403, {"ok": False, "error": "verification failed",
-                                    "recomputed": recomputed})
+            # Didn't reproduce a real run that ended in death -> reject.
+            return self._json(403, {"ok": False, "error": "verification failed"})
 
-        entry = {"name": _clean_name(replay.get("name")),
-                 "score": int(recomputed),
+        name = hs.sanitize_name(replay.get("name"))
+        if hs.is_bad_name(name):
+            return self._json(400, {"ok": False, "error": "name not allowed"})
+
+        owner = hashlib.sha256(str(replay.get("token", "")).encode()).hexdigest()
+        entry = {"name": name, "score": int(recomputed),
                  "round": int(replay.get("round", 0)),
                  "kills": int(replay.get("kills", 0)),
                  "time": int(replay.get("time", 0)),
                  "date": time.strftime("%Y-%m-%d")}
-        board = _store(entry)
+        board = _store(entry, owner)
+        if board is None:
+            return self._json(409, {"ok": False, "error": "name is taken by another player"})
         self._json(200, {"ok": True, "leaderboard": board})
 
     def log_message(self, *args):

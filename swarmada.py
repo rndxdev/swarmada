@@ -119,6 +119,10 @@ if not SERVER_URL:
 
 
 # Persistence: files on desktop; browser localStorage on web (survives reloads).
+def _store_path(key):
+    return {"scores": SCORES_FILE, "save": SAVE_FILE}.get(key, os.path.join(_DIR, key + ".dat"))
+
+
 def _store_read(key):
     if IS_WEB:
         try:
@@ -127,7 +131,7 @@ def _store_read(key):
             return None if v is None else str(v)
         except Exception:
             return None
-    path = SCORES_FILE if key == "scores" else SAVE_FILE
+    path = _store_path(key)
     try:
         with open(path) as f:
             return f.read()
@@ -143,7 +147,7 @@ def _store_write(key, text):
         except Exception:
             pass
         return
-    path = SCORES_FILE if key == "scores" else SAVE_FILE
+    path = _store_path(key)
     try:
         with open(path, "w") as f:
             f.write(text)
@@ -159,7 +163,7 @@ def _store_clear(key):
         except Exception:
             pass
         return
-    path = SCORES_FILE if key == "scores" else SAVE_FILE
+    path = _store_path(key)
     try:
         os.remove(path)
     except OSError:
@@ -179,6 +183,50 @@ def load_scores():
 
 def save_scores(scores):
     _store_write("scores", json.dumps(scores))
+
+
+# --- Leaderboard name rules (shared by client + server) --------------------
+BAD_WORDS = {
+    "fuck", "shit", "bitch", "cunt", "dick", "cock", "pussy", "asshole", "bastard",
+    "nigger", "nigga", "faggot", "fag", "retard", "rape", "rapist", "slut", "whore",
+    "nazi", "hitler", "kkk", "porn", "sex", "penis", "vagina", "boob", "tit",
+}
+
+
+def sanitize_name(name):
+    name = "".join(c for c in str(name)[:12] if c.isalnum() or c == " ").strip()
+    return name or "PLAYER"
+
+
+def is_bad_name(name):
+    low = name.lower()
+    collapsed = "".join(ch for ch in low if ch.isalnum())   # defeats spacing tricks
+    return any(b in low or b in collapsed for b in BAD_WORDS)
+
+
+def dedupe_best(entries):
+    """One row per name (case-insensitive), keeping the highest score; sorted desc."""
+    best = {}
+    for e in entries:
+        k = str(e.get("name", "")).lower()
+        if k not in best or e.get("score", 0) > best[k].get("score", 0):
+            best[k] = e
+    out = list(best.values())
+    out.sort(key=lambda e: e.get("score", 0), reverse=True)
+    return out
+
+
+def get_token():
+    """A stable per-player secret that 'owns' the names this player uses on the
+    global board (so nobody else can submit under your name)."""
+    t = _store_read("token")
+    if not t:
+        try:
+            t = "%032x" % random.SystemRandom().getrandbits(128)
+        except Exception:
+            t = "%032x" % random.getrandbits(128)
+        _store_write("token", t)
+    return t
 
 
 def save_game(game):
@@ -1164,9 +1212,11 @@ class Game:
         self.kills = 0
         self.score = 0
         self.name_input = ""
+        self.name_error = ""
         self.scores = []
         self.last_entry = None
         self.global_scores = None
+        self.score_msg = ""
         self.pending_replay = None
         self.paused = False
         self.spawn_timer = 0.0
@@ -1601,26 +1651,28 @@ class Game:
             self.choices = []
 
     def make_replay(self, name):
-        return {"v": SIM_VERSION, "seed": self.seed, "name": name,
+        return {"v": SIM_VERSION, "seed": self.seed, "name": name, "token": get_token(),
                 "score": int(self.score), "round": self.round,
                 "kills": self.kills, "time": int(self.elapsed),
                 "date": time.strftime("%Y-%m-%d"), "steps": list(self.replay)}
 
     def submit_score(self):
-        name = (self.name_input.strip() or "PLAYER")[:12]
+        name = sanitize_name(self.name_input)
+        if is_bad_name(name):
+            self.name_error = "that name isn't allowed — try another"
+            return                          # stay on the name-entry screen
         entry = {"name": name, "score": int(self.score), "round": self.round,
                  "kills": self.kills, "time": int(self.elapsed),
                  "date": time.strftime("%Y-%m-%d")}
-        # Local leaderboard
-        scores = load_scores()
-        scores.append(entry)
-        scores.sort(key=lambda e: e.get("score", 0), reverse=True)
-        save_scores(scores[:50])
-        self.scores = scores[:50]
-        self.last_entry = entry
+        # Local leaderboard: one row per name, keep best
+        scores = dedupe_best(load_scores() + [entry])[:50]
+        save_scores(scores)
+        self.scores = scores
+        self.last_entry = next((e for e in scores if e is entry), entry)
         clear_save()                       # run is over
         # Global leaderboard (best-effort; verified server-side via replay)
         self.global_scores = None
+        self.score_msg = ""
         self.pending_replay = None
         if SERVER_URL:
             if IS_WEB:
@@ -1819,8 +1871,11 @@ class Game:
         cursor = "_" if int(self.elapsed * 2) % 2 == 0 else " "
         name = self.big.render((self.name_input or "") + cursor, True, WHITE)
         s.blit(name, (WIDTH // 2 - name.get_width() // 2, 350))
+        if self.name_error:
+            er = self.font.render(self.name_error, True, HP_COL)
+            s.blit(er, (WIDTH // 2 - er.get_width() // 2, 400))
         hint = self.font.render("Press ENTER to save", True, DIM)
-        s.blit(hint, (WIDTH // 2 - hint.get_width() // 2, 410))
+        s.blit(hint, (WIDTH // 2 - hint.get_width() // 2, 432))
 
     def _draw_scores(self, s):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -1847,6 +1902,9 @@ class Game:
         if not board:
             none = self.font.render("No scores yet — be the first!", True, DIM)
             s.blit(none, (WIDTH // 2 - none.get_width() // 2, 160))
+        if self.score_msg:
+            em = self.font.render("⚠ " + self.score_msg, True, HP_COL)
+            s.blit(em, (WIDTH // 2 - em.get_width() // 2, HEIGHT - 78))
         msg = "Tap or press R to play again" if IS_WEB else "Press R to play again  •  Esc to quit"
         hint = self.font.render(msg, True, DIM)
         s.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 50))
@@ -1891,9 +1949,15 @@ class Game:
 # Entry point
 # ---------------------------------------------------------------------------
 def verify_replay(replay):
-    """Re-run a replay headlessly and confirm its claimed score. This is what
-    the server calls — a fabricated score won't reproduce, so it's rejected.
-    Returns (ok, recomputed_score)."""
+    """Re-run a replay headlessly and return (ok, server_recomputed_score).
+
+    The server stores its OWN recomputed score as authoritative, so every board
+    entry is computed in the same place and they're comparable. We only require
+    that the replay is a real run that ended in death — NOT that it matches the
+    client's number exactly, because float math differs slightly between the
+    browser (WASM) and the server (native), which would otherwise reject valid
+    high scores. A fabricated score still can't inflate the board: the inputs
+    must genuinely simulate to that score and end in a death."""
     if replay.get("v") != SIM_VERSION:
         return False, None
     steps = replay.get("steps") or []
@@ -1906,8 +1970,7 @@ def verify_replay(replay):
         g.step(int(mask) & 0x7F)
         if g.state == "enter_name":     # player died — run ended
             break
-    ok = (g.state == "enter_name") and (g.score == int(replay.get("score", -1)))
-    return ok, g.score
+    return (g.state == "enter_name"), g.score
 
 
 def resume_game(game, save):
@@ -1967,7 +2030,7 @@ async def submit_global_web(replay):
         text = await asyncio.wait_for(_req_handler().post(SERVER_URL + "/submit", replay), 10)
         data = json.loads(str(text))
         _LAST_FETCH_ERR = ""
-        return data.get("leaderboard") if isinstance(data, dict) else None
+        return data if isinstance(data, dict) else None
     except BaseException as e:
         _LAST_FETCH_ERR = repr(e)[:150]
         try:
@@ -2003,9 +2066,12 @@ async def _fetch_global_bg(state):
 
 async def _submit_global_bg(game, replay):
     """Background: submit a finished run, then swap the score screen to global."""
-    g = await submit_global_web(replay)
-    if g is not None:
-        game.global_scores = g
+    data = await submit_global_web(replay)
+    if isinstance(data, dict):
+        if data.get("leaderboard") is not None:
+            game.global_scores = data["leaderboard"]
+        elif data.get("error"):
+            game.score_msg = str(data["error"])
 
 
 async def load_assets(screen, big, small):
@@ -2587,9 +2653,11 @@ async def run_game(screen, clock, game, audio, font, big, small):
                         game.submit_score()
                     elif event.key == pygame.K_BACKSPACE:
                         game.name_input = game.name_input[:-1]
+                        game.name_error = ""
                     elif event.unicode and len(game.name_input) < 12 and (
                             event.unicode.isalnum() or event.unicode == " "):
                         game.name_input += event.unicode.upper()
+                        game.name_error = ""
                 elif event.key == pygame.K_f:
                     _fullscreen()
                 elif event.key == pygame.K_p and game.state == "play":
