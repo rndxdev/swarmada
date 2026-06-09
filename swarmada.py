@@ -1950,7 +1950,8 @@ def fetch_global():
 
 async def _web_fetch_json(url, method="GET", body=None):
     """Browser HTTP via JS fetch (WASM has no sockets). A plain-body POST with no
-    custom headers is a CORS 'simple request' -> no preflight needed. Best-effort."""
+    custom headers is a CORS 'simple request' -> no preflight needed. Fully
+    guarded (never raises, never hangs) so the UI can't crash on it."""
     try:
         import platform
         win = platform.window
@@ -1958,12 +1959,16 @@ async def _web_fetch_json(url, method="GET", body=None):
             opts = win.Object.new()
             opts.method = "POST"
             opts.body = body
-            resp = await win.fetch(url, opts)
+            resp = await asyncio.wait_for(win.fetch(url, opts), 8)
         else:
-            resp = await win.fetch(url)
-        text = await resp.text()
+            resp = await asyncio.wait_for(win.fetch(url), 8)
+        text = await asyncio.wait_for(resp.text(), 8)
         return json.loads(str(text))
-    except Exception:
+    except BaseException as e:
+        try:
+            print("swarmada: web fetch failed:", repr(e))
+        except Exception:
+            pass
         return None
 
 
