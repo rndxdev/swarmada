@@ -1948,10 +1948,14 @@ def fetch_global():
         return None
 
 
+_LAST_FETCH_ERR = ""
+
+
 async def _web_fetch_json(url, method="GET", body=None):
     """Browser HTTP via JS fetch (WASM has no sockets). A plain-body POST with no
     custom headers is a CORS 'simple request' -> no preflight needed. Fully
     guarded (never raises, never hangs) so the UI can't crash on it."""
+    global _LAST_FETCH_ERR
     try:
         import platform
         win = platform.window
@@ -1963,8 +1967,10 @@ async def _web_fetch_json(url, method="GET", body=None):
         else:
             resp = await asyncio.wait_for(win.fetch(url), 8)
         text = await asyncio.wait_for(resp.text(), 8)
+        _LAST_FETCH_ERR = ""
         return json.loads(str(text))
     except BaseException as e:
+        _LAST_FETCH_ERR = repr(e)[:150]
         try:
             print("swarmada: web fetch failed:", repr(e))
         except Exception:
@@ -2237,6 +2243,9 @@ async def leaderboard_screen(screen, clock, font, big, small):
         if not board:
             none = font.render("No scores yet — go set one!", True, DIM)
             screen.blit(none, (WIDTH // 2 - none.get_width() // 2, 170))
+        if IS_WEB and not is_global and _LAST_FETCH_ERR:
+            err = small.render("net: " + _LAST_FETCH_ERR, True, (200, 120, 120))
+            screen.blit(err, (WIDTH // 2 - err.get_width() // 2, HEIGHT - 80))
         hint = small.render("Esc or B: back", True, DIM)
         screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 56))
         pygame.display.flip()
